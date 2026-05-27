@@ -23,19 +23,32 @@ Tests, executables, examples, and other targets (`Qwen3TTS`, `CosyVoiceTTS`,
 
 ## Modifications relative to upstream
 
-The Swift source files under `Sources/` are reproduced **verbatim** from
+The Swift source files under `Sources/` are reproduced from
 `soniqo/speech-swift@0.0.15` and carry their original copyright notices.
 
-The only modification is to `Package.swift`:
+### `Package.swift`
 
 - Platform requirements lowered from `.macOS("15.0")` / `.iOS("18.0")` to
-  `.macOS("14.0")` / `.iOS("18.0")`. An audit of the four vendored targets
-  found no macOS 15-only APIs; the upstream `15.0` declaration is defensive
-  rather than mandatory.
+  `.macOS("14.0")` / `.iOS("18.0")`. The upstream `15.0` minimum is enforced
+  only by the CoreML stateful prediction path (`CoreMLTextDecoder`,
+  `CoreMLASRModel`), which uses `MLState` / `MLModel.makeState()` /
+  `MLModel.prediction(from:using:)` — APIs introduced in macOS 15 / iOS 18.
+  The MLX inference path (`Qwen3ASRModel`) does not depend on those APIs
+  and runs on macOS 14 once the affected types are properly gated.
 - The product, target, and dependency surface has been pruned to the four
-  vendored targets and a single library product (`Qwen3ASR`).
+  vendored targets (`Qwen3ASR`, `AudioCommon`, `MLXCommon`, `SpeechVAD`)
+  and the public products consumed downstream.
 
-No source code under `Sources/` has been modified.
+### `Sources/Qwen3ASR/CoreMLTextDecoder.swift`, `Sources/Qwen3ASR/CoreMLASRModel.swift`
+
+- Added `@available(macOS 15, iOS 18, *)` to `CoreMLTextDecoder`,
+  `CoreMLASRModel`, and both extensions of `CoreMLASRModel`. This makes the
+  CoreML inference path accessible only on macOS 15+ / iOS 18+ — the only
+  platforms where its required CoreML APIs exist — while letting the rest
+  of the package (including the MLX-based `Qwen3ASRModel` entry point) build
+  on macOS 14+.
+
+No other source code has been modified.
 
 ## Purpose
 
