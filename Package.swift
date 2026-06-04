@@ -36,10 +36,18 @@ let package = Package(
         .library(
             name: "SpeechVAD",
             targets: ["SpeechVAD"]
+        ),
+        .library(
+            name: "GraniteSpeech",
+            targets: ["GraniteSpeech"]
         )
     ],
     dependencies: [
-        .package(url: "https://github.com/ml-explore/mlx-swift", from: "0.30.0"),
+        // Pinned to the same minor the Onit app resolves (0.30.x) so standalone
+        // `swift test` runs against a matching Metal kernel library — a 0.31.x
+        // Cmlx expects fused kernels (e.g. layer_norm) absent from the app's
+        // 0.30.3 default.metallib used by the CLI test runner.
+        .package(url: "https://github.com/ml-explore/mlx-swift", .upToNextMinor(from: "0.30.3")),
         .package(url: "https://github.com/huggingface/swift-transformers", from: "1.1.6")
     ],
     targets: [
@@ -76,6 +84,25 @@ let package = Package(
                 .product(name: "MLX", package: "mlx-swift"),
                 .product(name: "MLXNN", package: "mlx-swift"),
                 .product(name: "MLXFast", package: "mlx-swift")
+            ]
+        ),
+        .target(
+            name: "GraniteSpeech",
+            dependencies: [
+                "AudioCommon",
+                "MLXCommon",
+                .product(name: "MLX", package: "mlx-swift"),
+                .product(name: "MLXNN", package: "mlx-swift"),
+                .product(name: "MLXFast", package: "mlx-swift"),
+                .product(name: "MLXFFT", package: "mlx-swift"),
+                .product(name: "Transformers", package: "swift-transformers")
+            ]
+        ),
+        .testTarget(
+            name: "GraniteSpeechTests",
+            dependencies: [
+                "GraniteSpeech",
+                .product(name: "MLX", package: "mlx-swift")
             ]
         )
     ]
