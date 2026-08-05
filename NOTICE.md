@@ -48,6 +48,15 @@ The Swift source files under `Sources/` are reproduced from
   of the package (including the MLX-based `Qwen3ASRModel` entry point) build
   on macOS 14+.
 
+### `Sources/Qwen3ASR/TrieBoost.swift` (added), `Sources/Qwen3ASR/Qwen3ASR.swift`, `Tests/Qwen3ASRTests/` (added)
+
+- Added decode-time contextual biasing ("token-trie shallow fusion") for
+  custom-dictionary terms: `Qwen3TokenTrie`, `Qwen3TrieBoostController`, and
+  a `generateTrieBoosted` greedy decode loop with snapshot/rollback
+  revocation, an EOS guard, and a term-chaining cooldown. `Qwen3DecodingOptions`
+  gained `boostTerms` / `boostStrength` / `boostMaxBacktracks`; the greedy
+  fast path is unchanged when boosting is off. Not present upstream.
+
 No other source code has been modified.
 
 ## Purpose

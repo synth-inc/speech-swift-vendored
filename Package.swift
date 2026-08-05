@@ -104,6 +104,12 @@ let package = Package(
                 "GraniteSpeech",
                 .product(name: "MLX", package: "mlx-swift")
             ]
+        ),
+        .testTarget(
+            name: "Qwen3ASRTests",
+            dependencies: [
+                "Qwen3ASR"
+            ]
         )
     ]
 )

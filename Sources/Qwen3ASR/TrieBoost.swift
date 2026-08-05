@@ -1,0 +1,293 @@
+//
+//  TrieBoost.swift
+//  Qwen3ASR
+//
+//  Decode-time contextual biasing ("shallow-fusion hotword boosting") for the
+//  Qwen3-ASR greedy decoder.
+//
+//  Mechanism: dictionary terms are tokenized into a token-prefix trie. At each
+//  decode step, tokens that would start or continue a registered term receive a
+//  logit bonus before argmax. Because greedy decoding cannot "un-emit" a token,
+//  boosted picks are speculative: when the boost flips a decision, the loop
+//  snapshots (scores, KV cache, emitted count) at that position; if the trie
+//  path later dies before completing a term, the loop rolls back to the
+//  snapshot and retries with the offending entry token banned. The KV cache in
+//  this package is functional (each step returns fresh arrays), so a rollback
+//  is just holding the old references — no recompute.
+//
+//  A completed term ends the speculation and keeps the emitted tokens. A
+//  bounded backtrack budget (`maxBacktracks`) guarantees the loop degenerates
+//  to plain greedy rather than thrashing on pathological audio.
+//
+
+import Foundation
+import MLX
+
+// MARK: - Token trie
+
+/// Token-prefix trie over the tokenizations of registered dictionary terms.
+///
+/// Each term is inserted in two surface variants — with a leading space
+/// (mid-sentence, the common case for byte-level BPE) and bare (utterance
+/// start). Multi-word terms form a single path spanning their word tokens.
+public final class Qwen3TokenTrie: @unchecked Sendable {
+    public struct Node {
+        public var children: [Int32: Int] = [:]
+        public var terminal = false
+    }
+
+    /// Node storage; index 0 is the root.
+    public private(set) var nodes: [Node] = [Node()]
+
+    public var isEmpty: Bool { nodes[0].children.isEmpty }
+
+    public init() {}
+
+    public func insert(_ tokens: [Int32]) {
+        guard !tokens.isEmpty else { return }
+        var cur = 0
+        for t in tokens {
+            if let next = nodes[cur].children[t] {
+                cur = next
+            } else {
+                nodes.append(Node())
+                nodes[cur].children[t] = nodes.count - 1
+                cur = nodes.count - 1
+            }
+        }
+        nodes[cur].terminal = true
+    }
+
+    /// Build a trie from dictionary terms using the model's tokenizer.
+    /// `encode` must be the same text→ids mapping the decoder emits under.
+    public static func build(terms: [String], encode: (String) -> [Int]) -> Qwen3TokenTrie {
+        let trie = Qwen3TokenTrie()
+        for raw in terms {
+            let term = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !term.isEmpty else { continue }
+            for variant in [" " + term, term] {
+                let tokens = encode(variant).map(Int32.init)
+                trie.insert(tokens)
+            }
+        }
+        return trie
+    }
+}
+
+// MARK: - Boost controller
+
+/// Pure-Swift decision engine for trie-boosted greedy decoding. Owns the trie
+/// walk, speculation bookkeeping, per-position bans, and the backtrack budget;
+/// the MLX decode loop owns tensors and the single rollback snapshot.
+public final class Qwen3TrieBoostController {
+    public enum Decision: Equatable {
+        /// Emit `token`. When `snapshot` is true the loop must save
+        /// (scores, cache, emitted-count) for this position BEFORE emitting —
+        /// a speculation is starting here.
+        case emit(token: Int32, snapshot: Bool)
+        /// Speculation failed: restore the snapshot, then call `decide` again
+        /// on the restored scores.
+        case rollback
+        /// Backtrack budget exhausted: restore the snapshot; boosting is now
+        /// disabled and subsequent decisions are plain greedy.
+        case abort
+    }
+
+    private let trie: Qwen3TokenTrie
+    private let boost: Float
+    private let maxBacktracks: Int
+    private let eosToken: Int32
+
+    /// Active trie nodes = partial term matches for the current hypothesis.
+    private var active: [Int] = []
+    private var speculating = false
+    private var checkpointActive: [Int] = []
+    private var checkpointCooldown = false
+    private var entryToken: Int32 = -1
+    /// Tokens banned at the checkpoint position (failed speculative entries).
+    private var bans: Set<Int32> = []
+    private var boostingEnabled = true
+    /// True while the previously-accepted token completed a term. Suppresses
+    /// boosted term *starts* for one token so a completed term cannot chain
+    /// straight into the next one (glossary-echo cascade guard).
+    private var cooldown = false
+
+    public private(set) var backtracks = 0
+    public private(set) var completions = 0
+    public var isSpeculating: Bool { speculating }
+
+    public init(
+        trie: Qwen3TokenTrie,
+        boost: Float,
+        maxBacktracks: Int = 16,
+        eosToken: Int32 = Int32(Qwen3ASRTokens.eosTokenId)
+    ) {
+        self.trie = trie
+        self.boost = boost
+        self.maxBacktracks = maxBacktracks
+        self.eosToken = eosToken
+    }
+
+    /// One decode-step decision over the CPU logits for the current position.
+    public func decide(scores: [Float]) -> Decision {
+        let boostable = currentBoostable()
+        var (raw, chosen) = Self.pick(scores: scores, boostable: boostable, banned: bans, boost: boost)
+        // EOS guard: when the model wants to stop and no speculation is in
+        // flight, never let the bonus start a term instead — that is how
+        // boosted decoding regurgitates the glossary at end of transcript.
+        if !speculating && raw == eosToken && chosen != raw {
+            chosen = raw
+        }
+        let influenced = chosen != raw
+        let newActive = advanced(with: chosen)
+        let completed = newActive.contains { trie.nodes[$0].terminal }
+
+        if speculating && (chosen == eosToken || newActive.isEmpty) {
+            // The path died before a term completed — revoke.
+            backtracks += 1
+            speculating = false
+            active = checkpointActive
+            cooldown = checkpointCooldown
+            if backtracks >= maxBacktracks {
+                boostingEnabled = false
+                bans.removeAll()
+                return .abort
+            }
+            bans.insert(entryToken)
+            return .rollback
+        }
+
+        var snapshot = false
+        if influenced && !speculating && boostingEnabled {
+            speculating = true
+            checkpointActive = active
+            checkpointCooldown = cooldown
+            entryToken = chosen
+            snapshot = true
+        }
+        active = newActive
+        if completed {
+            completions += 1
+            speculating = false
+            bans.removeAll()
+        } else if !speculating {
+            // Moved past any contested position without speculation.
+            bans.removeAll()
+        }
+        cooldown = completed
+        return .emit(token: chosen, snapshot: snapshot)
+    }
+
+    /// Tokens eligible for the bonus at this step. During speculation only
+    /// continuations of the active path(s) are boosted — new term starts wait
+    /// until the current one resolves, so a single snapshot always suffices.
+    /// Directly after a completed term (`cooldown`) new starts are not
+    /// boosted either, so completions cannot cascade term-to-term.
+    private func currentBoostable() -> Set<Int32> {
+        guard boostingEnabled else { return [] }
+        var out = Set<Int32>()
+        for s in active { out.formUnion(trie.nodes[s].children.keys) }
+        if !speculating && !cooldown { out.formUnion(trie.nodes[0].children.keys) }
+        return out
+    }
+
+    private func advanced(with token: Int32) -> [Int] {
+        var out: [Int] = []
+        for s in active {
+            if let next = trie.nodes[s].children[token] { out.append(next) }
+        }
+        if let start = trie.nodes[0].children[token], !out.contains(start) {
+            out.append(start)
+        }
+        return out
+    }
+
+    /// Raw and boosted argmax over the vocab. Bans apply only to the boosted
+    /// pick; a banned token can never be the raw winner (bans only ever hold
+    /// tokens that won *because* of the bonus).
+    static func pick(
+        scores: [Float], boostable: Set<Int32>, banned: Set<Int32>, boost: Float
+    ) -> (raw: Int32, chosen: Int32) {
+        var rawBest = 0
+        var rawScore = -Float.infinity
+        var boostedBest = 0
+        var boostedScore = -Float.infinity
+        let checkBans = !banned.isEmpty
+        let checkBoost = !boostable.isEmpty
+        for i in 0..<scores.count {
+            let s = scores[i]
+            if s > rawScore { rawScore = s; rawBest = i }
+            let t = Int32(i)
+            if checkBans && banned.contains(t) { continue }
+            let b = (checkBoost && boostable.contains(t)) ? s + boost : s
+            if b > boostedScore { boostedScore = b; boostedBest = i }
+        }
+        return (Int32(rawBest), Int32(boostedBest))
+    }
+}
+
+// MARK: - Decode loop
+
+extension Qwen3ASRModel {
+    /// Greedy decode with trie-boosted token selection and snapshot/rollback
+    /// revocation. Structure mirrors `generateSlow` (per-token CPU sync); the
+    /// extra cost is one 600 KB logits copy per step plus re-decoded tokens
+    /// after a rollback (rare, bounded by `controller`'s backtrack budget).
+    static func generateTrieBoosted(
+        textDecoder: QuantizedTextModel,
+        initialLogits: MLXArray,
+        cache initialCache: [(MLXArray, MLXArray)],
+        maxTokens: Int,
+        controller: Qwen3TrieBoostController
+    ) -> [Int32] {
+        var generated: [Int32] = []
+        guard maxTokens > 0 else { return generated }
+
+        var cache = initialCache
+        var scores = cpuScores(initialLogits)
+
+        // Single rollback snapshot — valid because at most one speculation is
+        // in flight (the controller defers new term starts while speculating).
+        var snapScores: [Float] = []
+        var snapCache: [(MLXArray, MLXArray)] = []
+        var snapCount = 0
+
+        let eosToken = Int32(Qwen3ASRTokens.eosTokenId)
+
+        while generated.count < maxTokens {
+            switch controller.decide(scores: scores) {
+            case .emit(let token, let snapshot):
+                if snapshot {
+                    snapScores = scores
+                    snapCache = cache
+                    snapCount = generated.count
+                }
+                generated.append(token)
+                if token == eosToken { return generated }
+
+                let embed = textDecoder.embedTokens(
+                    MLXArray([token]).expandedDimensions(axis: 0))
+                let (hidden, newCache) = textDecoder(inputsEmbeds: embed, cache: cache)
+                let lastHidden = hidden[0..., (-1)..., .ellipsis]
+                let logits = textDecoder.embedTokens.asLinear(lastHidden)
+                cache = newCache
+                scores = cpuScores(logits)
+
+            case .rollback, .abort:
+                generated.removeLast(generated.count - snapCount)
+                cache = snapCache
+                scores = snapScores
+            }
+        }
+
+        // Budget exhausted mid-speculation: drop the dangling partial term.
+        if controller.isSpeculating && snapCount <= generated.count {
+            generated.removeLast(generated.count - snapCount)
+        }
+        return generated
+    }
+
+    private static func cpuScores(_ logits: MLXArray) -> [Float] {
+        logits.squeezed().asType(.float32).asArray(Float.self)
+    }
+}

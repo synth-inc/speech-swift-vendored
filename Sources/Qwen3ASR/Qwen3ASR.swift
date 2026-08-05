@@ -33,13 +33,29 @@ public struct Qwen3DecodingOptions: Sendable {
     /// Gumbel-max. Higher = more random.
     public var temperature: Float = 0.0
 
+    /// Dictionary terms to bias toward at decode time via token-trie shallow
+    /// fusion (see `TrieBoost.swift`). Empty = boosting off. When non-empty
+    /// the decoder takes the trie-boosted greedy path and the other slow-path
+    /// knobs (repetition penalty, n-gram, temperature) are ignored.
+    public var boostTerms: [String] = []
+
+    /// Logit bonus added to tokens that start or continue a registered term.
+    public var boostStrength: Float = 4.0
+
+    /// Failed-speculation cap; after this many rollbacks boosting deactivates
+    /// for the rest of the utterance.
+    public var boostMaxBacktracks: Int = 16
+
     public init(
         maxTokens: Int = 448,
         language: String? = nil,
         context: String? = nil,
         repetitionPenalty: Float = 1.0,
         noRepeatNgramSize: Int = 0,
-        temperature: Float = 0.0
+        temperature: Float = 0.0,
+        boostTerms: [String] = [],
+        boostStrength: Float = 4.0,
+        boostMaxBacktracks: Int = 16
     ) {
         self.maxTokens = maxTokens
         self.language = language
@@ -47,6 +63,9 @@ public struct Qwen3DecodingOptions: Sendable {
         self.repetitionPenalty = repetitionPenalty
         self.noRepeatNgramSize = noRepeatNgramSize
         self.temperature = temperature
+        self.boostTerms = boostTerms
+        self.boostStrength = boostStrength
+        self.boostMaxBacktracks = boostMaxBacktracks
     }
 }
 
@@ -261,8 +280,30 @@ public class Qwen3ASRModel {
         // legacy slow path stays on the per-token CPU sync because it pulls
         // the full logits tensor to CPU for repetition / n-gram / temperature
         // manipulation, which would defeat the overlap.
+        // Trie-boosted path: dictionary terms bias token selection at decode
+        // time (shallow fusion with rollback revocation — see TrieBoost.swift).
+        var trieController: Qwen3TrieBoostController? = nil
+        if !decodingOptions.boostTerms.isEmpty, let tokenizer = tokenizer {
+            let trie = Qwen3TokenTrie.build(
+                terms: decodingOptions.boostTerms, encode: tokenizer.encode)
+            if !trie.isEmpty {
+                trieController = Qwen3TrieBoostController(
+                    trie: trie,
+                    boost: decodingOptions.boostStrength,
+                    maxBacktracks: decodingOptions.boostMaxBacktracks)
+            }
+        }
+
         let generatedTokens: [Int32]
-        if Self.isGreedyFastPath(decodingOptions) {
+        if let controller = trieController {
+            generatedTokens = Self.generateTrieBoosted(
+                textDecoder: textDecoder,
+                initialLogits: logits,
+                cache: cache!,
+                maxTokens: maxTokens,
+                controller: controller
+            )
+        } else if Self.isGreedyFastPath(decodingOptions) {
             generatedTokens = Self.generateGreedyAsyncEval(
                 textDecoder: textDecoder,
                 initialLogits: logits,
@@ -301,6 +342,7 @@ public class Qwen3ASRModel {
         return options.repetitionPenalty == 1.0
             && options.noRepeatNgramSize == 0
             && options.temperature == 0.0
+            && options.boostTerms.isEmpty
     }
 
     /// Double-buffered greedy decode loop. The key trick is to keep the
