@@ -34,6 +34,10 @@ public final class Qwen3TokenTrie: @unchecked Sendable {
     public struct Node {
         public var children: [Int32: Int] = [:]
         public var terminal = false
+        /// Non-nil on alias terminals: the canonical-form tokens that replace
+        /// the emitted alias span when this path completes (same leading-space
+        /// variant as the alias surface). Nil = canonical path, keep as-is.
+        public var rewrite: [Int32]? = nil
     }
 
     /// Node storage; index 0 is the root.
@@ -43,7 +47,7 @@ public final class Qwen3TokenTrie: @unchecked Sendable {
 
     public init() {}
 
-    public func insert(_ tokens: [Int32]) {
+    public func insert(_ tokens: [Int32], rewrite: [Int32]? = nil) {
         guard !tokens.isEmpty else { return }
         var cur = 0
         for t in tokens {
@@ -56,18 +60,38 @@ public final class Qwen3TokenTrie: @unchecked Sendable {
             }
         }
         nodes[cur].terminal = true
+        if let rewrite { nodes[cur].rewrite = rewrite }
     }
 
     /// Build a trie from dictionary terms using the model's tokenizer.
     /// `encode` must be the same text→ids mapping the decoder emits under.
-    public static func build(terms: [String], encode: (String) -> [Int]) -> Qwen3TokenTrie {
+    ///
+    /// `aliases` maps a canonical term to known mis-spellings/mishearings
+    /// (e.g. "Lenardo" → ["Leonardo", "Linardo"]). Alias paths are boosted
+    /// like the canonical and, on completion, rewrite the emitted span to the
+    /// canonical form — the multi-pronunciation-variant trie from the
+    /// contextual-biasing literature. Register only surfaces the user would
+    /// not dictate deliberately; the rewrite is unconditional.
+    public static func build(
+        terms: [String],
+        aliases: [String: [String]] = [:],
+        encode: (String) -> [Int]
+    ) -> Qwen3TokenTrie {
         let trie = Qwen3TokenTrie()
         for raw in terms {
             let term = raw.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !term.isEmpty else { continue }
-            for variant in [" " + term, term] {
-                let tokens = encode(variant).map(Int32.init)
-                trie.insert(tokens)
+            for prefix in [" ", ""] {
+                trie.insert(encode(prefix + term).map(Int32.init))
+            }
+            for alias in aliases[raw] ?? aliases[term] ?? [] {
+                let surface = alias.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !surface.isEmpty, surface != term else { continue }
+                for prefix in [" ", ""] {
+                    trie.insert(
+                        encode(prefix + surface).map(Int32.init),
+                        rewrite: encode(prefix + term).map(Int32.init))
+                }
             }
         }
         return trie
@@ -80,11 +104,22 @@ public final class Qwen3TokenTrie: @unchecked Sendable {
 /// walk, speculation bookkeeping, per-position bans, and the backtrack budget;
 /// the MLX decode loop owns tensors and the single rollback snapshot.
 public final class Qwen3TrieBoostController {
+    /// Alias-completion splice the loop must apply to its emitted tokens:
+    /// the last `spanLength` tokens (including the token just emitted) are
+    /// replaced by `replacement`. The KV cache keeps the alias tokens — the
+    /// forms are near-homographs, so downstream conditioning drift is
+    /// negligible for word-length spans.
+    public struct Rewrite: Equatable {
+        public let spanLength: Int
+        public let replacement: [Int32]
+    }
+
     public enum Decision: Equatable {
         /// Emit `token`. When `snapshot` is true the loop must save
         /// (scores, cache, emitted-count) for this position BEFORE emitting —
-        /// a speculation is starting here.
-        case emit(token: Int32, snapshot: Bool)
+        /// a speculation is starting here. A non-nil `rewrite` means the token
+        /// completed an alias path: splice after appending.
+        case emit(token: Int32, snapshot: Bool, rewrite: Rewrite?)
         /// Speculation failed: restore the snapshot, then call `decide` again
         /// on the restored scores.
         case rollback
@@ -98,10 +133,12 @@ public final class Qwen3TrieBoostController {
     private let maxBacktracks: Int
     private let eosToken: Int32
 
-    /// Active trie nodes = partial term matches for the current hypothesis.
-    private var active: [Int] = []
+    /// Partial term matches for the current hypothesis: trie node + how many
+    /// emitted tokens this path spans (needed for alias-rewrite splices).
+    private struct PathState: Equatable { var node: Int; var depth: Int }
+    private var active: [PathState] = []
     private var speculating = false
-    private var checkpointActive: [Int] = []
+    private var checkpointActive: [PathState] = []
     private var checkpointCooldown = false
     private var entryToken: Int32 = -1
     /// Tokens banned at the checkpoint position (failed speculative entries).
@@ -140,7 +177,12 @@ public final class Qwen3TrieBoostController {
         }
         let influenced = chosen != raw
         let newActive = advanced(with: chosen)
-        let completed = newActive.contains { trie.nodes[$0].terminal }
+        // Completion = deepest terminal reached by this token (longest match
+        // wins when an alias and a canonical end on the same token).
+        let completedState = newActive
+            .filter { trie.nodes[$0.node].terminal }
+            .max { $0.depth < $1.depth }
+        let completed = completedState != nil
 
         if speculating && (chosen == eosToken || newActive.isEmpty) {
             // The path died before a term completed — revoke.
@@ -166,16 +208,22 @@ public final class Qwen3TrieBoostController {
             snapshot = true
         }
         active = newActive
-        if completed {
+        var rewrite: Rewrite? = nil
+        if let done = completedState {
             completions += 1
             speculating = false
             bans.removeAll()
+            if let replacement = trie.nodes[done.node].rewrite {
+                rewrite = Rewrite(spanLength: done.depth, replacement: replacement)
+                // The splice invalidates other partial paths over that span.
+                active = []
+            }
         } else if !speculating {
             // Moved past any contested position without speculation.
             bans.removeAll()
         }
         cooldown = completed
-        return .emit(token: chosen, snapshot: snapshot)
+        return .emit(token: chosen, snapshot: snapshot, rewrite: rewrite)
     }
 
     /// Tokens eligible for the bonus at this step. During speculation only
@@ -186,18 +234,21 @@ public final class Qwen3TrieBoostController {
     private func currentBoostable() -> Set<Int32> {
         guard boostingEnabled else { return [] }
         var out = Set<Int32>()
-        for s in active { out.formUnion(trie.nodes[s].children.keys) }
+        for s in active { out.formUnion(trie.nodes[s.node].children.keys) }
         if !speculating && !cooldown { out.formUnion(trie.nodes[0].children.keys) }
         return out
     }
 
-    private func advanced(with token: Int32) -> [Int] {
-        var out: [Int] = []
+    private func advanced(with token: Int32) -> [PathState] {
+        var out: [PathState] = []
         for s in active {
-            if let next = trie.nodes[s].children[token] { out.append(next) }
+            if let next = trie.nodes[s.node].children[token] {
+                out.append(PathState(node: next, depth: s.depth + 1))
+            }
         }
-        if let start = trie.nodes[0].children[token], !out.contains(start) {
-            out.append(start)
+        if let start = trie.nodes[0].children[token],
+           !out.contains(where: { $0.node == start }) {
+            out.append(PathState(node: start, depth: 1))
         }
         return out
     }
@@ -256,13 +307,18 @@ extension Qwen3ASRModel {
 
         while generated.count < maxTokens {
             switch controller.decide(scores: scores) {
-            case .emit(let token, let snapshot):
+            case .emit(let token, let snapshot, let rewrite):
                 if snapshot {
                     snapScores = scores
                     snapCache = cache
                     snapCount = generated.count
                 }
                 generated.append(token)
+                if let rewrite, rewrite.spanLength <= generated.count {
+                    generated.replaceSubrange(
+                        (generated.count - rewrite.spanLength)..<generated.count,
+                        with: rewrite.replacement)
+                }
                 if token == eosToken { return generated }
 
                 let embed = textDecoder.embedTokens(

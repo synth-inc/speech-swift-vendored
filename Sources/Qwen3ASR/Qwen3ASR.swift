@@ -46,6 +46,11 @@ public struct Qwen3DecodingOptions: Sendable {
     /// for the rest of the utterance.
     public var boostMaxBacktracks: Int = 16
 
+    /// Canonical term → known mishearing surfaces. Alias paths are boosted
+    /// like the canonical and rewritten to it on completion (unconditional —
+    /// register only surfaces the user would not dictate deliberately).
+    public var boostAliases: [String: [String]] = [:]
+
     public init(
         maxTokens: Int = 448,
         language: String? = nil,
@@ -55,7 +60,8 @@ public struct Qwen3DecodingOptions: Sendable {
         temperature: Float = 0.0,
         boostTerms: [String] = [],
         boostStrength: Float = 4.0,
-        boostMaxBacktracks: Int = 16
+        boostMaxBacktracks: Int = 16,
+        boostAliases: [String: [String]] = [:]
     ) {
         self.maxTokens = maxTokens
         self.language = language
@@ -66,6 +72,7 @@ public struct Qwen3DecodingOptions: Sendable {
         self.boostTerms = boostTerms
         self.boostStrength = boostStrength
         self.boostMaxBacktracks = boostMaxBacktracks
+        self.boostAliases = boostAliases
     }
 }
 
@@ -285,7 +292,9 @@ public class Qwen3ASRModel {
         var trieController: Qwen3TrieBoostController? = nil
         if !decodingOptions.boostTerms.isEmpty, let tokenizer = tokenizer {
             let trie = Qwen3TokenTrie.build(
-                terms: decodingOptions.boostTerms, encode: tokenizer.encode)
+                terms: decodingOptions.boostTerms,
+                aliases: decodingOptions.boostAliases,
+                encode: tokenizer.encode)
             if !trie.isEmpty {
                 trieController = Qwen3TrieBoostController(
                     trie: trie,

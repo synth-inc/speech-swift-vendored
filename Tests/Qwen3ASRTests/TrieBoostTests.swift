@@ -97,7 +97,7 @@ final class TrieBoostTests: XCTestCase {
     func testPlainTokensEmitWithoutSnapshot() {
         let c = controller()
         let d = c.decide(scores: scores(winner: 0))
-        XCTAssertEqual(d, .emit(token: 0, snapshot: false))
+        XCTAssertEqual(d, .emit(token: 0, snapshot: false, rewrite: nil))
         XCTAssertFalse(c.isSpeculating)
     }
 
@@ -107,15 +107,15 @@ final class TrieBoostTests: XCTestCase {
         let c = controller()
         // Step 1: " S" wins raw by 2, " C" flips via boost → speculation starts.
         var d = c.decide(scores: scores(winner: 4, gap: [1: -3]))
-        XCTAssertEqual(d, .emit(token: 1, snapshot: true))
+        XCTAssertEqual(d, .emit(token: 1, snapshot: true, rewrite: nil))
         XCTAssertTrue(c.isSpeculating)
         // Step 2: "er" continues (also boosted, close call).
         d = c.decide(scores: scores(winner: 2))
-        XCTAssertEqual(d, .emit(token: 2, snapshot: false))
+        XCTAssertEqual(d, .emit(token: 2, snapshot: false, rewrite: nil))
         XCTAssertTrue(c.isSpeculating)
         // Step 3: "ity" completes the term → speculation over.
         d = c.decide(scores: scores(winner: 3))
-        XCTAssertEqual(d, .emit(token: 3, snapshot: false))
+        XCTAssertEqual(d, .emit(token: 3, snapshot: false, rewrite: nil))
         XCTAssertFalse(c.isSpeculating)
         XCTAssertEqual(c.completions, 1)
         XCTAssertEqual(c.backtracks, 0)
@@ -126,7 +126,7 @@ final class TrieBoostTests: XCTestCase {
         _ = c.decide(scores: scores(winner: 4, gap: [1: -3]))  // enter " C"
         // "er" trails "." by 2 raw; continuation boost should flip it.
         let d = c.decide(scores: scores(winner: 6, gap: [2: -3]))
-        XCTAssertEqual(d, .emit(token: 2, snapshot: false))
+        XCTAssertEqual(d, .emit(token: 2, snapshot: false, rewrite: nil))
     }
 
     // MARK: - Failed speculation
@@ -134,7 +134,7 @@ final class TrieBoostTests: XCTestCase {
     func testDeadPathRollsBackAndBansEntry() {
         let c = controller()
         var d = c.decide(scores: scores(winner: 4, gap: [1: -3]))  // speculative " C"
-        XCTAssertEqual(d, .emit(token: 1, snapshot: true))
+        XCTAssertEqual(d, .emit(token: 1, snapshot: true, rewrite: nil))
         // Next step: "." wins by a mile; no continuation → path dies.
         d = c.decide(scores: scores(winner: 6))
         XCTAssertEqual(d, .rollback)
@@ -143,7 +143,7 @@ final class TrieBoostTests: XCTestCase {
         // Re-decision at the restored position: entry token 1 is banned,
         // so the raw winner " S" goes through.
         d = c.decide(scores: scores(winner: 4, gap: [1: -3]))
-        XCTAssertEqual(d, .emit(token: 4, snapshot: false))
+        XCTAssertEqual(d, .emit(token: 4, snapshot: false, rewrite: nil))
         XCTAssertFalse(c.isSpeculating)
     }
 
@@ -161,7 +161,7 @@ final class TrieBoostTests: XCTestCase {
         _ = c.decide(scores: scores(winner: 4, gap: [1: -3]))   // emit raw " S"
         // New position: token 1 must be boostable again (ban was positional).
         let d = c.decide(scores: scores(winner: 4, gap: [1: -3]))
-        XCTAssertEqual(d, .emit(token: 1, snapshot: true))
+        XCTAssertEqual(d, .emit(token: 1, snapshot: true, rewrite: nil))
     }
 
     func testSecondEntryCanSpeculateAfterFirstBanned() {
@@ -171,7 +171,7 @@ final class TrieBoostTests: XCTestCase {
         // Restored position now has " On" (8) close behind: with 1 banned,
         // 8 should win via boost → a fresh speculation.
         let d = c.decide(scores: scores(winner: 4, gap: [1: -3, 8: -3]))
-        XCTAssertEqual(d, .emit(token: 8, snapshot: true))
+        XCTAssertEqual(d, .emit(token: 8, snapshot: true, rewrite: nil))
         XCTAssertTrue(c.isSpeculating)
     }
 
@@ -184,7 +184,78 @@ final class TrieBoostTests: XCTestCase {
         XCTAssertEqual(d, .abort)
         // Boosting disabled: the same close call now resolves raw.
         let d2 = c.decide(scores: scores(winner: 4, gap: [1: -3]))
-        XCTAssertEqual(d2, .emit(token: 4, snapshot: false))
+        XCTAssertEqual(d2, .emit(token: 4, snapshot: false, rewrite: nil))
+    }
+
+    // MARK: - Alias rewrite
+
+    /// Toy alias: "Leonardo" = [4, 2, 3] rewrites to "Lenardo" = [1, 2, 3].
+    private func aliasController(boost: Float = 4) -> Qwen3TrieBoostController {
+        let trie = Qwen3TokenTrie()
+        trie.insert([1, 2, 3])                       // canonical
+        trie.insert([4, 2, 3], rewrite: [1, 2, 3])   // alias → canonical
+        return Qwen3TrieBoostController(
+            trie: trie, boost: boost, maxBacktracks: 16, eosToken: eos)
+    }
+
+    func testNaturalAliasCompletionRewrites() {
+        let c = aliasController()
+        // Model freely produces the alias (raw wins each step — no boost).
+        var d = c.decide(scores: scores(winner: 4))
+        XCTAssertEqual(d, .emit(token: 4, snapshot: false, rewrite: nil))
+        d = c.decide(scores: scores(winner: 2))
+        XCTAssertEqual(d, .emit(token: 2, snapshot: false, rewrite: nil))
+        d = c.decide(scores: scores(winner: 3))
+        XCTAssertEqual(d, .emit(
+            token: 3, snapshot: false,
+            rewrite: .init(spanLength: 3, replacement: [1, 2, 3])))
+        XCTAssertEqual(c.completions, 1)
+    }
+
+    func testBoostedAliasCompletionRewrites() {
+        let c = aliasController()
+        // Alias start trails by 2, flips via boost, completes → rewrite.
+        var d = c.decide(scores: scores(winner: 5, gap: [4: -3]))
+        XCTAssertEqual(d, .emit(token: 4, snapshot: true, rewrite: nil))
+        _ = c.decide(scores: scores(winner: 2))
+        d = c.decide(scores: scores(winner: 3))
+        XCTAssertEqual(d, .emit(
+            token: 3, snapshot: false,
+            rewrite: .init(spanLength: 3, replacement: [1, 2, 3])))
+        XCTAssertFalse(c.isSpeculating)
+    }
+
+    func testCanonicalCompletionHasNoRewrite() {
+        let c = aliasController()
+        _ = c.decide(scores: scores(winner: 1))
+        _ = c.decide(scores: scores(winner: 2))
+        let d = c.decide(scores: scores(winner: 3))
+        XCTAssertEqual(d, .emit(token: 3, snapshot: false, rewrite: nil))
+    }
+
+    func testBuildRegistersAliasWithRewrite() {
+        // encode stub: " Lenardo"→[1,2], "Lenardo"→[11,12], " Leonardo"→[4,2],
+        // "Leonardo"→[14,12].
+        let trie = Qwen3TokenTrie.build(
+            terms: ["Lenardo"], aliases: ["Lenardo": ["Leonardo"]]
+        ) { text in
+            switch text {
+            case " Lenardo": return [1, 2]
+            case "Lenardo": return [11, 12]
+            case " Leonardo": return [4, 2]
+            default: return [14, 12]
+            }
+        }
+        // Walk " Leonardo" and confirm the terminal rewrites to " Lenardo".
+        let n4 = trie.nodes[0].children[4]!
+        let n42 = trie.nodes[n4].children[2]!
+        XCTAssertTrue(trie.nodes[n42].terminal)
+        XCTAssertEqual(trie.nodes[n42].rewrite, [1, 2])
+        // Canonical path has no rewrite.
+        let n1 = trie.nodes[0].children[1]!
+        let n12 = trie.nodes[n1].children[2]!
+        XCTAssertTrue(trie.nodes[n12].terminal)
+        XCTAssertNil(trie.nodes[n12].rewrite)
     }
 
     // MARK: - Echo guards
@@ -193,7 +264,7 @@ final class TrieBoostTests: XCTestCase {
         let c = controller()
         // Model wants EOS; " C" (1) is close behind. Boost must NOT flip it.
         let d = c.decide(scores: scores(winner: Int(eos), gap: [1: -3]))
-        XCTAssertEqual(d, .emit(token: eos, snapshot: false))
+        XCTAssertEqual(d, .emit(token: eos, snapshot: false, rewrite: nil))
         XCTAssertFalse(c.isSpeculating)
     }
 
@@ -202,16 +273,16 @@ final class TrieBoostTests: XCTestCase {
         // Complete "Onit" via boost: enter " On" (8), finish "it" (9).
         _ = c.decide(scores: scores(winner: 4, gap: [8: -3]))
         var d = c.decide(scores: scores(winner: 9))
-        XCTAssertEqual(d, .emit(token: 9, snapshot: false))
+        XCTAssertEqual(d, .emit(token: 9, snapshot: false, rewrite: nil))
         XCTAssertEqual(c.completions, 1)
         // Immediately after the completion, " C" (1) trails by 2 — without the
         // cooldown the boost would flip it and chain a second term.
         d = c.decide(scores: scores(winner: 4, gap: [1: -3]))
-        XCTAssertEqual(d, .emit(token: 4, snapshot: false))
+        XCTAssertEqual(d, .emit(token: 4, snapshot: false, rewrite: nil))
         XCTAssertFalse(c.isSpeculating)
         // One token later the cooldown has cleared: starts boost again.
         d = c.decide(scores: scores(winner: 4, gap: [1: -3]))
-        XCTAssertEqual(d, .emit(token: 1, snapshot: true))
+        XCTAssertEqual(d, .emit(token: 1, snapshot: true, rewrite: nil))
     }
 
     // MARK: - Natural (unboosted) trie traversal
@@ -220,11 +291,11 @@ final class TrieBoostTests: XCTestCase {
         let c = controller()
         // " C" wins RAW (no boost influence) → no speculation.
         var d = c.decide(scores: scores(winner: 1))
-        XCTAssertEqual(d, .emit(token: 1, snapshot: false))
+        XCTAssertEqual(d, .emit(token: 1, snapshot: false, rewrite: nil))
         XCTAssertFalse(c.isSpeculating)
         // Path dies naturally → plain emit, no rollback.
         d = c.decide(scores: scores(winner: 6))
-        XCTAssertEqual(d, .emit(token: 6, snapshot: false))
+        XCTAssertEqual(d, .emit(token: 6, snapshot: false, rewrite: nil))
         XCTAssertEqual(c.backtracks, 0)
     }
 }
