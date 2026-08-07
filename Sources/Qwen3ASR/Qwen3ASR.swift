@@ -310,7 +310,12 @@ public class Qwen3ASRModel {
                 initialLogits: logits,
                 cache: cache!,
                 maxTokens: maxTokens,
-                controller: controller
+                controller: controller,
+                // With auto language detection the model re-emits a
+                // "language XX<asr_text>" prefix; keep the boost disarmed
+                // until the transcript region starts so a dictionary term
+                // can't corrupt the structural prefix (review finding).
+                armAfterToken: language == nil ? Int32(asrTextId) : nil
             )
         } else if Self.isGreedyFastPath(decodingOptions) {
             generatedTokens = Self.generateGreedyAsyncEval(

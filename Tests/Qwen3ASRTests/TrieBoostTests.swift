@@ -258,6 +258,50 @@ final class TrieBoostTests: XCTestCase {
         XCTAssertNil(trie.nodes[n12].rewrite)
     }
 
+    // MARK: - Review-finding regressions
+
+    func testSpeculationNotRescuedByUnrelatedRootStart() {
+        // Boost flips " C" (term A entry); next raw token " On" (8) starts a
+        // DIFFERENT term. The speculation must die (rollback), not survive by
+        // adopting the unrelated path — otherwise the wrong flipped token is
+        // permanently committed when "Onit" completes.
+        let c = controller()
+        var d = c.decide(scores: scores(winner: 4, gap: [1: -3]))
+        XCTAssertEqual(d, .emit(token: 1, snapshot: true, rewrite: nil))
+        d = c.decide(scores: scores(winner: 8))
+        XCTAssertEqual(d, .rollback)
+    }
+
+    func testBansArePositional() {
+        let c = controller()
+        // Spec-A on token 1 fails; ban(1) at checkpoint.
+        _ = c.decide(scores: scores(winner: 4, gap: [1: -3]))
+        _ = c.decide(scores: scores(winner: 6))
+        // Re-decision: 1 banned here; 8 flips instead → spec-B.
+        var d = c.decide(scores: scores(winner: 4, gap: [1: -3, 8: -3]))
+        XCTAssertEqual(d, .emit(token: 8, snapshot: true, rewrite: nil))
+        // Deeper position: raw winner is token 1. The old code vetoed it via
+        // the leaked ban and emitted second-best (corruption). Correct: 1 is
+        // pickable; it kills spec-B (not a continuation) → rollback.
+        d = c.decide(scores: scores(winner: 1))
+        XCTAssertEqual(d, .rollback)
+        // Back at the checkpoint both entries are banned → raw goes through.
+        d = c.decide(scores: scores(winner: 4, gap: [1: -3, 8: -3]))
+        XCTAssertEqual(d, .emit(token: 4, snapshot: false, rewrite: nil))
+    }
+
+    func testDisarmedControllerIsPureGreedy() {
+        let c = controller()
+        c.setArmed(false)
+        // A flippable close call must NOT flip while disarmed.
+        var d = c.decide(scores: scores(winner: 4, gap: [1: -3]))
+        XCTAssertEqual(d, .emit(token: 4, snapshot: false, rewrite: nil))
+        XCTAssertFalse(c.isSpeculating)
+        c.setArmed(true)
+        d = c.decide(scores: scores(winner: 4, gap: [1: -3]))
+        XCTAssertEqual(d, .emit(token: 1, snapshot: true, rewrite: nil))
+    }
+
     // MARK: - Echo guards
 
     func testNoBoostedStartAgainstEos() {

@@ -148,10 +148,24 @@ public final class Qwen3TrieBoostController {
     /// boosted term *starts* for one token so a completed term cannot chain
     /// straight into the next one (glossary-echo cascade guard).
     private var cooldown = false
+    /// Emit counter + the emit-position bans belong to. Bans veto only the
+    /// re-decision at the checkpoint position they were created for; at any
+    /// other position they are inert (a banned token must never override the
+    /// raw argmax elsewhere — review finding: ban leak).
+    private var emitCount = 0
+    private var banPosition = -1
+    /// Until armed, decisions are pure greedy with no trie tracking. Used to
+    /// keep the boost away from Qwen's auto-language prefix
+    /// ("language XX<asr_text>") when no language is forced.
+    private var armed = true
 
     public private(set) var backtracks = 0
     public private(set) var completions = 0
     public var isSpeculating: Bool { speculating }
+
+    /// Disarm at init via `armed: false`, then `arm()` once the transcript
+    /// region begins (after the `<asr_text>` token).
+    public func setArmed(_ value: Bool) { armed = value }
 
     public init(
         trie: Qwen3TokenTrie,
@@ -167,8 +181,17 @@ public final class Qwen3TrieBoostController {
 
     /// One decode-step decision over the CPU logits for the current position.
     public func decide(scores: [Float]) -> Decision {
+        guard armed else {
+            // Pure greedy, no trie tracking, until armed.
+            let (raw, _) = Self.pick(scores: scores, boostable: [], banned: [], boost: 0)
+            emitCount += 1
+            return .emit(token: raw, snapshot: false, rewrite: nil)
+        }
         let boostable = currentBoostable()
-        var (raw, chosen) = Self.pick(scores: scores, boostable: boostable, banned: bans, boost: boost)
+        // Bans are positional: only the checkpoint re-decision they were
+        // created at may be vetoed by them.
+        let effectiveBans = (emitCount == banPosition) ? bans : []
+        var (raw, chosen) = Self.pick(scores: scores, boostable: boostable, banned: effectiveBans, boost: boost)
         // EOS guard: when the model wants to stop and no speculation is in
         // flight, never let the bonus start a term instead — that is how
         // boosted decoding regurgitates the glossary at end of transcript.
@@ -190,9 +213,11 @@ public final class Qwen3TrieBoostController {
             speculating = false
             active = checkpointActive
             cooldown = checkpointCooldown
+            emitCount = banPosition  // back at the checkpoint position
             if backtracks >= maxBacktracks {
                 boostingEnabled = false
                 bans.removeAll()
+                banPosition = -1
                 return .abort
             }
             bans.insert(entryToken)
@@ -205,6 +230,9 @@ public final class Qwen3TrieBoostController {
             checkpointActive = active
             checkpointCooldown = cooldown
             entryToken = chosen
+            // Bans created by earlier failed entries at THIS position stay
+            // associated with it (positional gating in `decide`).
+            banPosition = emitCount
             snapshot = true
         }
         active = newActive
@@ -212,7 +240,7 @@ public final class Qwen3TrieBoostController {
         if let done = completedState {
             completions += 1
             speculating = false
-            bans.removeAll()
+            bans.removeAll(); banPosition = -1
             if let replacement = trie.nodes[done.node].rewrite {
                 rewrite = Rewrite(spanLength: done.depth, replacement: replacement)
                 // The splice invalidates other partial paths over that span.
@@ -220,9 +248,10 @@ public final class Qwen3TrieBoostController {
             }
         } else if !speculating {
             // Moved past any contested position without speculation.
-            bans.removeAll()
+            bans.removeAll(); banPosition = -1
         }
         cooldown = completed
+        emitCount += 1
         return .emit(token: chosen, snapshot: snapshot, rewrite: rewrite)
     }
 
@@ -246,7 +275,12 @@ public final class Qwen3TrieBoostController {
                 out.append(PathState(node: next, depth: s.depth + 1))
             }
         }
-        if let start = trie.nodes[0].children[token],
+        // No NEW root starts while speculating: a speculation must live or die
+        // by the path its flipped entry token began. Tracking unrelated starts
+        // let a dead speculation be "rescued" by a different term completing,
+        // permanently committing the wrong flipped token (review finding).
+        if !speculating,
+           let start = trie.nodes[0].children[token],
            !out.contains(where: { $0.node == start }) {
             out.append(PathState(node: start, depth: 1))
         }
@@ -289,7 +323,8 @@ extension Qwen3ASRModel {
         initialLogits: MLXArray,
         cache initialCache: [(MLXArray, MLXArray)],
         maxTokens: Int,
-        controller: Qwen3TrieBoostController
+        controller: Qwen3TrieBoostController,
+        armAfterToken: Int32? = nil
     ) -> [Int32] {
         var generated: [Int32] = []
         guard maxTokens > 0 else { return generated }
@@ -305,9 +340,19 @@ extension Qwen3ASRModel {
 
         let eosToken = Int32(Qwen3ASRTokens.eosTokenId)
 
-        while generated.count < maxTokens {
+        // Bound DECODER ITERATIONS, not the spliced output length: an alias
+        // whose replacement is shorter than its surface shrinks `generated`,
+        // which must not extend the decode budget (review finding). Rollback
+        // re-decodes also consume budget via their re-emits.
+        var steps = 0
+        // Waiting-to-arm: keep the boost away from the auto-language prefix.
+        var awaitingArm = armAfterToken != nil
+        if awaitingArm { controller.setArmed(false) }
+
+        while steps < maxTokens {
             switch controller.decide(scores: scores) {
             case .emit(let token, let snapshot, let rewrite):
+                steps += 1
                 if snapshot {
                     snapScores = scores
                     snapCache = cache
@@ -320,6 +365,16 @@ extension Qwen3ASRModel {
                         with: rewrite.replacement)
                 }
                 if token == eosToken { return generated }
+                if awaitingArm, token == armAfterToken! || steps >= 8 {
+                    // Prefix over (or clearly absent) — boost from here on.
+                    controller.setArmed(true)
+                    awaitingArm = false
+                }
+                if !controller.isSpeculating && !snapCache.isEmpty {
+                    // Speculation resolved — release the checkpoint KV cache
+                    // instead of pinning it for the rest of the utterance.
+                    snapCache = []; snapScores = []
+                }
 
                 let embed = textDecoder.embedTokens(
                     MLXArray([token]).expandedDimensions(axis: 0))
