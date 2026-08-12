@@ -99,6 +99,37 @@ public class Qwen3ASRModel {
     /// Tokenizer for decoding output tokens
     private var tokenizer: Qwen3Tokenizer?
 
+    /// Memoized boost trie: building tokenizes every term + alias (2 surface
+    /// variants each), which at large term counts (persistent term memory,
+    /// 500+ terms) dominated the boosted path's overhead (~630 ms per
+    /// dictation in the large-K stress test). The term/alias lists change
+    /// rarely (store writes, dictionary edits), so cache on a cheap FNV-1a
+    /// key of the inputs and rebuild only when they change. Not synchronized:
+    /// `transcribe` is already serialized by the caller (one utterance at a
+    /// time per model).
+    private var cachedBoostTrie: (key: UInt64, trie: Qwen3TokenTrie)?
+
+    /// Build-or-reuse the token trie for the given boost inputs.
+    func boostTrie(terms: [String], aliases: [String: [String]],
+                   encode: (String) -> [Int]) -> Qwen3TokenTrie {
+        var hash: UInt64 = 0xcbf29ce484222325
+        func mix(_ s: String) {
+            for b in s.utf8 { hash = (hash ^ UInt64(b)) &* 0x100000001b3 }
+            hash = (hash ^ 0x1f) &* 0x100000001b3  // separator
+        }
+        for t in terms { mix(t) }
+        for key in aliases.keys.sorted() {
+            mix("§" + key)
+            for a in aliases[key] ?? [] { mix(a) }
+        }
+        if let cached = cachedBoostTrie, cached.key == hash {
+            return cached.trie
+        }
+        let trie = Qwen3TokenTrie.build(terms: terms, aliases: aliases, encode: encode)
+        cachedBoostTrie = (hash, trie)
+        return trie
+    }
+
     /// Text decoder config
     public let textConfig: TextDecoderConfig
 
@@ -291,7 +322,7 @@ public class Qwen3ASRModel {
         // time (shallow fusion with rollback revocation — see TrieBoost.swift).
         var trieController: Qwen3TrieBoostController? = nil
         if !decodingOptions.boostTerms.isEmpty, let tokenizer = tokenizer {
-            let trie = Qwen3TokenTrie.build(
+            let trie = boostTrie(
                 terms: decodingOptions.boostTerms,
                 aliases: decodingOptions.boostAliases,
                 encode: tokenizer.encode)
