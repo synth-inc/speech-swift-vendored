@@ -191,10 +191,9 @@ public class CoreMLASREncoder {
 
         switch array.dataType {
         case .float16:
-            let src = array.dataPointer.assumingMemoryBound(to: Float16.self)
-            var floats = [Float](repeating: 0, count: count)
-            for i in 0..<count { floats[i] = Float(src[i]) }
-            return MLXArray(floats, shape)
+            // `Float16` is unavailable on x86_64 macOS; Accelerate widens the
+            // whole block in one call (and honours ANE padding when present).
+            return MLXArray(Float16Storage.read(array, count: count), shape)
         case .float32:
             let src = array.dataPointer.assumingMemoryBound(to: Float.self)
             return MLXArray(Array(UnsafeBufferPointer(start: src, count: count)), shape)

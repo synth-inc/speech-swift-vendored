@@ -2,7 +2,7 @@
 //  Configuration.swift
 //  GraniteSpeech
 //
-//  Created by Onit on 2026-06-03.
+//  Created by Kévin Naudin on 2026-06-03.
 //
 //  Native MLX-Swift port of IBM Granite-Speech 4.1-2b.
 //  Config mirrors mlx-audio `granite_speech/config.py`. Field values are the

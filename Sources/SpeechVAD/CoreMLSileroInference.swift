@@ -18,19 +18,21 @@ extension SileroVADModel {
                 operation: "VAD", reason: "CoreML model not loaded")
         }
 
-        // Create audio input: [1, 1, 576] float16
+        // Create audio input: [1, 1, 576] float16.
+        // `Float16` is unavailable on x86_64 macOS, so the conversion goes
+        // through Accelerate rather than a typed pointer — one vImage call
+        // instead of the previous per-element loop.
         let audioArray = try MLMultiArray(shape: [1, 1, 576], dataType: .float16)
-        let audioPtr = audioArray.dataPointer.assumingMemoryBound(to: Float16.self)
-        for i in 0..<576 {
-            audioPtr[i] = Float16(fullSamples[i])
+        fullSamples.withUnsafeBufferPointer {
+            Float16Storage.write($0.baseAddress!, count: 576, intoPadded: audioArray)
         }
 
         // Initialize h/c to zeros on first call
         if coremlH == nil {
             coremlH = try MLMultiArray(shape: [1, 1, 128], dataType: .float16)
             coremlC = try MLMultiArray(shape: [1, 1, 128], dataType: .float16)
-            zeroFillFloat16(coremlH!)
-            zeroFillFloat16(coremlC!)
+            Float16Storage.zeroFill(coremlH!)
+            Float16Storage.zeroFill(coremlC!)
         }
 
         let input = try MLDictionaryFeatureProvider(dictionary: [
@@ -47,18 +49,7 @@ extension SileroVADModel {
 
         // Extract probability scalar
         let probArray = result.featureValue(for: "probability")!.multiArrayValue!
-        let probPtr = probArray.dataPointer.assumingMemoryBound(to: Float16.self)
-        return Float(probPtr[0])
-    }
-
-    /// Zero-fill a float16 MLMultiArray.
-    private func zeroFillFloat16(_ array: MLMultiArray) {
-        let ptr = UnsafeMutableBufferPointer(
-            start: array.dataPointer.assumingMemoryBound(to: Float16.self),
-            count: array.count)
-        for i in 0..<ptr.count {
-            ptr[i] = 0
-        }
+        return probArray[0].floatValue
     }
 }
 #endif

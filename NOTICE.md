@@ -1,15 +1,10 @@
 # NOTICE
 
-This repository contains two distinct bodies of code, both distributed under
-the Apache License 2.0 — see [`LICENSE`](LICENSE):
+This repository contains a vendored subset of
+[soniqo/speech-swift](https://github.com/soniqo/speech-swift), licensed under
+the Apache License 2.0 — see [`LICENSE`](LICENSE).
 
-1. A **vendored subset** of
-   [soniqo/speech-swift](https://github.com/soniqo/speech-swift)
-   (`Qwen3ASR`, `AudioCommon`, `MLXCommon`, `SpeechVAD`).
-   Copyright 2025 Ivan Digital (original work).
-2. **Original work** — the `GraniteSpeech` target — authored in this
-   repository and not derived from soniqo/speech-swift.
-   Copyright 2026 Onit.
+Copyright 2025 Ivan Digital (original work).
 
 ## Vendored content
 
@@ -43,8 +38,6 @@ The Swift source files under `Sources/` are reproduced from
 - The product, target, and dependency surface has been pruned to the four
   vendored targets (`Qwen3ASR`, `AudioCommon`, `MLXCommon`, `SpeechVAD`)
   and the public products consumed downstream.
-- A `GraniteSpeech` target was added — this is original work, not part of the
-  vendored subset (see *Original work* below).
 
 ### `Sources/Qwen3ASR/CoreMLTextDecoder.swift`, `Sources/Qwen3ASR/CoreMLASRModel.swift`
 
@@ -55,24 +48,24 @@ The Swift source files under `Sources/` are reproduced from
   of the package (including the MLX-based `Qwen3ASRModel` entry point) build
   on macOS 14+.
 
-No other vendored source code has been modified.
+### `Sources/Qwen3ASR/TrieBoost.swift` (added), `Sources/Qwen3ASR/Qwen3ASR.swift`, `Tests/Qwen3ASRTests/` (added)
 
-## Original work
+- Added decode-time contextual biasing ("token-trie shallow fusion") for
+  custom-dictionary terms: `Qwen3TokenTrie`, `Qwen3TrieBoostController`, and
+  a `generateTrieBoosted` greedy decode loop with snapshot/rollback
+  revocation, an EOS guard, and a term-chaining cooldown. `Qwen3DecodingOptions`
+  gained `boostTerms` / `boostStrength` / `boostMaxBacktracks`; the greedy
+  fast path is unchanged when boosting is off. Not present upstream.
 
-`Sources/GraniteSpeech/` is original work authored in this repository: a native
-MLX-Swift port of [IBM Granite-Speech 4.1-2b](https://huggingface.co/ibm-granite/granite-speech-4.1-2b),
-structurally mirroring the reference [mlx-audio](https://github.com/Blaizzy/mlx-audio)
-implementation. It is **not** derived from soniqo/speech-swift; it only depends
-on the vendored `AudioCommon` and `MLXCommon` targets. Copyright 2026
-Onit, licensed under the Apache License 2.0.
+No other source code has been modified.
 
 ## Purpose
 
-This vendor exists to allow downstream consumers to depend on Qwen3-ASR
-inference while keeping a `MACOSX_DEPLOYMENT_TARGET` of `14.0` (macOS Sonoma
-support). The upstream package declares `.macOS("15.0")`, which prevents SPM
-resolution from a Sonoma-compatible consumer even though the underlying code
-runs fine on macOS 14.
+This vendor exists to allow `onit-beacon` (and other consumers) to depend on
+Qwen3-ASR inference while keeping a `MACOSX_DEPLOYMENT_TARGET` of `14.0`
+(macOS Sonoma support). The upstream package declares `.macOS("15.0")`,
+which prevents SPM resolution from a Sonoma-compatible consumer even though
+the underlying code runs fine on macOS 14.
 
-When upstream lowers its platform requirement, the vendored subset should be
-removed in favour of the upstream package.
+When upstream lowers its platform requirement, this vendor should be removed
+in favour of the upstream package.

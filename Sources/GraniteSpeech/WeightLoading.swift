@@ -2,7 +2,7 @@
 //  WeightLoading.swift
 //  GraniteSpeech
 //
-//  Created by Onit on 2026-06-03.
+//  Created by Kévin Naudin on 2026-06-03.
 //
 //  Loads the 3 safetensors shards of ibm-granite/granite-speech-4.1-2b and
 //  applies the sanitize that the upstream mlx-audio `Model.sanitize` gets wrong

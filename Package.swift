@@ -9,9 +9,6 @@
 //  Platform requirements lowered from macOS 15 / iOS 18 to macOS 14 / iOS 18
 //  (audit confirmed no macOS 15-only APIs are used in those targets).
 //
-//  GraniteSpeech is original work (a native MLX-Swift port of IBM
-//  Granite-Speech 4.1-2b), not part of the vendored subset.
-//
 //  See NOTICE.md for upstream attribution and modification log.
 //
 
@@ -46,10 +43,10 @@ let package = Package(
         )
     ],
     dependencies: [
-        // Pinned to the 0.30.x minor so a standalone build resolves against a
-        // matching Metal kernel library — a 0.31.x Cmlx expects fused kernels
-        // (e.g. layer_norm) absent from the 0.30.3 default.metallib used by the
-        // downstream consumer's runtime.
+        // Pinned to the same minor the Onit app resolves (0.30.x) so standalone
+        // `swift test` runs against a matching Metal kernel library — a 0.31.x
+        // Cmlx expects fused kernels (e.g. layer_norm) absent from the app's
+        // 0.30.3 default.metallib used by the CLI test runner.
         .package(url: "https://github.com/ml-explore/mlx-swift", .upToNextMinor(from: "0.30.3")),
         .package(url: "https://github.com/huggingface/swift-transformers", from: "1.1.6")
     ],
@@ -99,6 +96,19 @@ let package = Package(
                 .product(name: "MLXFast", package: "mlx-swift"),
                 .product(name: "MLXFFT", package: "mlx-swift"),
                 .product(name: "Transformers", package: "swift-transformers")
+            ]
+        ),
+        .testTarget(
+            name: "GraniteSpeechTests",
+            dependencies: [
+                "GraniteSpeech",
+                .product(name: "MLX", package: "mlx-swift")
+            ]
+        ),
+        .testTarget(
+            name: "Qwen3ASRTests",
+            dependencies: [
+                "Qwen3ASR"
             ]
         )
     ]

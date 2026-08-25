@@ -2,7 +2,7 @@
 //  Model.swift
 //  GraniteSpeech
 //
-//  Created by Onit on 2026-06-03.
+//  Created by Kévin Naudin on 2026-06-03.
 //
 //  Top-level Granite-Speech model (Phase 4f): ties preprocessing -> encoder ->
 //  projector -> prompt build (tokenizer) -> audio splicing -> greedy decode ->

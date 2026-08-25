@@ -2,7 +2,7 @@
 //  Encoder.swift
 //  GraniteSpeech
 //
-//  Created by Onit on 2026-06-03.
+//  Created by Kévin Naudin on 2026-06-03.
 //
 //  CTC Conformer encoder (Phase 4c), ported 1:1 from mlx-audio
 //  `granite_speech.py` (CTCEncoder + ConformerBlock and submodules). Module

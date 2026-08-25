@@ -2,7 +2,7 @@
 //  AudioPreprocessing.swift
 //  GraniteSpeech
 //
-//  Created by Onit on 2026-06-03.
+//  Created by Kévin Naudin on 2026-06-03.
 //
 //  Port of mlx-audio `granite_speech.Model._extract_features` (Phase 4b).
 //  Mirrors the reference 1:1 to stay numerically aligned with the Python

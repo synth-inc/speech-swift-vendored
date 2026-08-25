@@ -2,7 +2,7 @@
 //  Projector.swift
 //  GraniteSpeech
 //
-//  Created by Onit on 2026-06-03.
+//  Created by Kévin Naudin on 2026-06-03.
 //
 //  BLIP-2 Q-Former projector (Phase 4d), ported 1:1 from mlx-audio
 //  `granite_speech.py` (EncoderProjector + QFormer* modules). Maps the encoder

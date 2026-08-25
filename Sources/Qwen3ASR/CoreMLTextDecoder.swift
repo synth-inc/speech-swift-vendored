@@ -221,13 +221,19 @@ public class CoreMLTextDecoder {
 
         switch logits.dataType {
         case .float16:
-            let ptr = logits.dataPointer.assumingMemoryBound(to: Float16.self)
-            for i in 0..<count {
-                let val = Float(ptr[i])
-                if val > maxVal {
-                    maxVal = val
-                    maxIdx = Int32(i)
-                }
+            // `Float16` is unavailable on x86_64 macOS. The widening is
+            // vectorized (one Accelerate pass over the whole vocab), then the
+            // max is taken with the same `>` comparison as the other branches.
+            //
+            // Deliberately NOT `vDSP_maxvi`: it propagates NaN into its running
+            // max, where `>` is false for NaN and skips it. On a poisoned logit
+            // row vDSP would return the wrong token; this keeps the original
+            // semantics and is still faster than the scalar fp16 loop it
+            // replaced, because the conversion is no longer per-element.
+            let widened = Float16Storage.read(logits, count: count)
+            for i in 0..<count where widened[i] > maxVal {
+                maxVal = widened[i]
+                maxIdx = Int32(i)
             }
         case .float32:
             let ptr = logits.dataPointer.assumingMemoryBound(to: Float.self)

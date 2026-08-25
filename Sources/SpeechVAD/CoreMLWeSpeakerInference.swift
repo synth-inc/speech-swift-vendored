@@ -32,17 +32,20 @@ extension WeSpeakerModel {
             shape: [1, targetLength as NSNumber, 80],
             dataType: .float16
         )
-        let melPtr = melArray.dataPointer.assumingMemoryBound(to: Float16.self)
-
-        // Fill with mel data (row-major: frame-major, 80 mels per frame)
+        // `Float16` is unavailable on x86_64 macOS — see CoreMLSileroInference.
+        // Fill with mel data (row-major: frame-major, 80 mels per frame), then
+        // zero-pad the remaining frames.
+        //
+        // `baseAddress` is nil for an empty array, so a degenerate segment
+        // (`nFrames == 0`) takes the plain zero-fill instead of force-unwrapping
+        // — the loops this replaced were a harmless no-op in that case.
         let copyCount = min(nFrames, targetLength) * 80
-        for i in 0..<copyCount {
-            melPtr[i] = Float16(melSpec[i])
-        }
-        // Zero-pad remaining frames
-        let totalElements = targetLength * 80
-        for i in copyCount..<totalElements {
-            melPtr[i] = 0
+        if copyCount > 0 {
+            melSpec.withUnsafeBufferPointer {
+                Float16Storage.write($0.baseAddress!, count: copyCount, intoPadded: melArray)
+            }
+        } else {
+            Float16Storage.zeroFill(melArray)
         }
 
         let input = try MLDictionaryFeatureProvider(dictionary: [
@@ -58,11 +61,7 @@ extension WeSpeakerModel {
         }
 
         // Read 256 float16 values
-        var embedding = [Float](repeating: 0, count: 256)
-        let embPtr = embArray.dataPointer.assumingMemoryBound(to: Float16.self)
-        for i in 0..<256 {
-            embedding[i] = Float(embPtr[i])
-        }
+        var embedding = Float16Storage.read(embArray, count: 256)
 
         // L2 normalize
         let norm = sqrt(embedding.reduce(Float(0)) { $0 + $1 * $1 })

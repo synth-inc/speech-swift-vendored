@@ -1,4 +1,3 @@
 .build/
 .swiftpm/
 Package.resolved
-.claude/tasks/

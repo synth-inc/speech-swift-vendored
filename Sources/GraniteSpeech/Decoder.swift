@@ -2,7 +2,7 @@
 //  Decoder.swift
 //  GraniteSpeech
 //
-//  Created by Onit on 2026-06-03.
+//  Created by Kévin Naudin on 2026-06-03.
 //
 //  Granite dense-transformer decoder (Phase 4e), ported 1:1 from
 //  `mlx_lm.models.granite` + the mlx-audio `granite_speech.Model.__call__`
