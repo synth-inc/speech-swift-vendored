@@ -262,7 +262,7 @@ public class CoreMLTextDecoder {
     /// Audio embeddings from the CoreML encoder are [1, T, 1024].
     /// Each position is fed to the decoder one at a time during prefill.
     public func audioEmbeddingToMultiArray(_ embedding: MLXArray, at index: Int) throws -> MLMultiArray {
-        // embedding: [1, T, hidden_size] — extract [1, 1, hidden_size] at index
+        // embedding: [1, T, hidden_size] - extract [1, 1, hidden_size] at index
         let hidden = embedding.dim(2)
         let result = try MLMultiArray(shape: [1, 1, hidden as NSNumber], dataType: .float32)
         let ptr = result.dataPointer.assumingMemoryBound(to: Float.self)
@@ -301,7 +301,7 @@ public class CoreMLTextDecoder {
     // MARK: - Helpers
 
     private static func findModel(named name: String, in directory: URL) -> URL? {
-        // Only pre-compiled ``.mlmodelc`` is supported — on-device
+        // Only pre-compiled ``.mlmodelc`` is supported - on-device
         // ``MLModel.compileModel`` drifts per runtime, and the published
         // ``aufklarer/Qwen3-ASR-CoreML`` repo ships compiled bundles only.
         let compiled = directory.appendingPathComponent("\(name).mlmodelc", isDirectory: true)

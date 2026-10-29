@@ -8,8 +8,8 @@
 //  projector -> prompt build (tokenizer) -> audio splicing -> greedy decode ->
 //  detokenize. Mirrors mlx-audio `Model.generate`. The prompt uses the model's
 //  canonical chat template `USER: {content}\n ASSISTANT:` (note the space before
-//  ASSISTANT) — the same string `apply_chat_template(add_generation_prompt=true)`
-//  produces — rendered directly here rather than via Jinja.
+//  ASSISTANT) - the same string `apply_chat_template(add_generation_prompt=true)`
+//  produces - rendered directly here rather than via Jinja.
 //
 
 import Foundation

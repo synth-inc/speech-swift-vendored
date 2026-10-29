@@ -78,7 +78,7 @@ final class TrieBoostTests: XCTestCase {
     }
 
     func testPickBoostCannotFlipLargeGap() {
-        // Gap of 8 > boost of 4 — acoustics win.
+        // Gap of 8 > boost of 4 - acoustics win.
         let s = scores(winner: 4, gap: [1: -9])
         let (_, chosen) = Qwen3TrieBoostController.pick(
             scores: s, boostable: [1], banned: [], boost: 4)
@@ -189,7 +189,7 @@ final class TrieBoostTests: XCTestCase {
 
     // MARK: - Alias rewrite
 
-    /// Toy alias: "Leonardo" = [4, 2, 3] rewrites to "Lenardo" = [1, 2, 3].
+    /// Toy alias: "Leonardo" = [4, 2, 3] rewrites to "Fernardo" = [1, 2, 3].
     private func aliasController(boost: Float = 4) -> Qwen3TrieBoostController {
         let trie = Qwen3TokenTrie()
         trie.insert([1, 2, 3])                       // canonical
@@ -200,7 +200,7 @@ final class TrieBoostTests: XCTestCase {
 
     func testNaturalAliasCompletionRewrites() {
         let c = aliasController()
-        // Model freely produces the alias (raw wins each step — no boost).
+        // Model freely produces the alias (raw wins each step - no boost).
         var d = c.decide(scores: scores(winner: 4))
         XCTAssertEqual(d, .emit(token: 4, snapshot: false, rewrite: nil))
         d = c.decide(scores: scores(winner: 2))
@@ -234,19 +234,19 @@ final class TrieBoostTests: XCTestCase {
     }
 
     func testBuildRegistersAliasWithRewrite() {
-        // encode stub: " Lenardo"→[1,2], "Lenardo"→[11,12], " Leonardo"→[4,2],
+        // encode stub: " Fernardo"→[1,2], "Fernardo"→[11,12], " Leonardo"→[4,2],
         // "Leonardo"→[14,12].
         let trie = Qwen3TokenTrie.build(
-            terms: ["Lenardo"], aliases: ["Lenardo": ["Leonardo"]]
+            terms: ["Fernardo"], aliases: ["Fernardo": ["Leonardo"]]
         ) { text in
             switch text {
-            case " Lenardo": return [1, 2]
-            case "Lenardo": return [11, 12]
+            case " Fernardo": return [1, 2]
+            case "Fernardo": return [11, 12]
             case " Leonardo": return [4, 2]
             default: return [14, 12]
             }
         }
-        // Walk " Leonardo" and confirm the terminal rewrites to " Lenardo".
+        // Walk " Leonardo" and confirm the terminal rewrites to " Fernardo".
         let n4 = trie.nodes[0].children[4]!
         let n42 = trie.nodes[n4].children[2]!
         XCTAssertTrue(trie.nodes[n42].terminal)
@@ -263,7 +263,7 @@ final class TrieBoostTests: XCTestCase {
     func testSpeculationNotRescuedByUnrelatedRootStart() {
         // Boost flips " C" (term A entry); next raw token " On" (8) starts a
         // DIFFERENT term. The speculation must die (rollback), not survive by
-        // adopting the unrelated path — otherwise the wrong flipped token is
+        // adopting the unrelated path - otherwise the wrong flipped token is
         // permanently committed when "Onit" completes.
         let c = controller()
         var d = c.decide(scores: scores(winner: 4, gap: [1: -3]))
@@ -319,7 +319,7 @@ final class TrieBoostTests: XCTestCase {
         var d = c.decide(scores: scores(winner: 9))
         XCTAssertEqual(d, .emit(token: 9, snapshot: false, rewrite: nil))
         XCTAssertEqual(c.completions, 1)
-        // Immediately after the completion, " C" (1) trails by 2 — without the
+        // Immediately after the completion, " C" (1) trails by 2 - without the
         // cooldown the boost would flip it and chain a second term.
         d = c.decide(scores: scores(winner: 4, gap: [1: -3]))
         XCTAssertEqual(d, .emit(token: 4, snapshot: false, rewrite: nil))

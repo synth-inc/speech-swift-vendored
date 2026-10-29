@@ -49,7 +49,7 @@ dependencies: [
 ]
 ```
 
-> No versioned release is tagged yet — pin to `branch: "main"` or a specific
+> No versioned release is tagged yet - pin to `branch: "main"` or a specific
 > revision until a tag is published.
 
 Then add the products you need to a target:
@@ -66,13 +66,13 @@ Then add the products you need to a target:
 
 ## Models
 
-Model weights are **not** bundled. Download them from HuggingFace at runtime —
+Model weights are **not** bundled. Download them from HuggingFace at runtime -
 `AudioCommon.HuggingFaceDownloader` is provided for this. GraniteSpeech expects
 a local directory containing the model's safetensors shards, `config.json`, and
 tokenizer files (e.g. the contents of
 [`ibm-granite/granite-speech-4.1-2b`](https://huggingface.co/ibm-granite/granite-speech-4.1-2b)).
 
-## Quickstart — GraniteSpeech
+## Quickstart - GraniteSpeech
 
 ```swift
 import GraniteSpeech
@@ -92,7 +92,7 @@ print(transcript)
 (preprocessing → encoder → projector → greedy decode → detokenize). Pass a
 custom `userPrompt` to override the default transcription instruction.
 
-## Quickstart — Qwen3-ASR
+## Quickstart - Qwen3-ASR
 
 Load 16 kHz mono audio with `AudioFileLoader`, then transcribe through a loaded
 `Qwen3ASRModel`:
@@ -116,4 +116,4 @@ transcription gated by `SpeechVAD`.
 
 ## License
 
-Apache License 2.0 — see [`LICENSE`](LICENSE) and [`NOTICE.md`](NOTICE.md).
+Apache License 2.0 - see [`LICENSE`](LICENSE) and [`NOTICE.md`](NOTICE.md).

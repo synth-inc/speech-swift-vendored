@@ -32,7 +32,7 @@ public enum AudioFileLoader {
     }
 
     /// Load audio file and return stereo channels at target sample rate.
-    /// Returns `[left, right]` — mono files are duplicated to stereo.
+    /// Returns `[left, right]` - mono files are duplicated to stereo.
     public static func loadStereo(url: URL, targetSampleRate: Int = 44100) throws -> [[Float]] {
         let audioFile = try AVAudioFile(forReading: url)
         let format = audioFile.processingFormat

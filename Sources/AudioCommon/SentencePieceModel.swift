@@ -2,7 +2,7 @@ import Foundation
 
 /// Minimal SentencePiece `.model` (`sentencepiece_model.proto`) reader.
 ///
-/// Extracts the vocabulary list — `(text, score, type)` for every piece —
+/// Extracts the vocabulary list - `(text, score, type)` for every piece -
 /// without requiring a protobuf runtime dependency. Modules build their own
 /// encode/decode logic on top: this struct only owns the wire-format parse
 /// and the raw piece array.

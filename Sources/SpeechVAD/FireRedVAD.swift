@@ -235,7 +235,7 @@ public final class FireRedVADModel {
             for: "probabilities"
         )?.multiArrayValue else { return [] }
 
-        // Extract probabilities — output is [1, T, 1]
+        // Extract probabilities - output is [1, T, 1]
         var probs = [Float](repeating: 0, count: numFrames)
         for i in 0..<numFrames {
             probs[i] = outputArray[[0, NSNumber(value: i), 0]].floatValue

@@ -253,7 +253,7 @@ public final class CTCEncoder: Module {
     /// Shaw relative-position index matrix `(contextSize, contextSize)`:
     /// `clip(seq[:,None] - seq[None,:], -C, C) + max_pos_emb`. Computed per
     /// forward (a tiny int matrix, negligible vs the 16 conformer blocks)
-    /// rather than stored — a stored `MLXArray` would be reflected as a model
+    /// rather than stored - a stored `MLXArray` would be reflected as a model
     /// parameter and break `.allModelKeysSet` weight-load verification (it's a
     /// constant, not a checkpoint weight).
     private func attentionDists() -> MLXArray {

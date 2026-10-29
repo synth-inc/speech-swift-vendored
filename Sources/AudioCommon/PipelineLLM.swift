@@ -9,7 +9,7 @@ public protocol PipelineLLM: AnyObject {
     /// Generate a response given conversation messages.
     ///
     /// Called on the pipeline's worker thread (blocking). Emit tokens via
-    /// `onToken(text, isFinal)` — the pipeline forwards them to TTS.
+    /// `onToken(text, isFinal)` - the pipeline forwards them to TTS.
     func chat(messages: [(role: MessageRole, content: String)],
               onToken: @escaping (String, Bool) -> Void)
 

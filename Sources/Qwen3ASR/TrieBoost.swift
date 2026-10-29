@@ -13,7 +13,7 @@
 //  path later dies before completing a term, the loop rolls back to the
 //  snapshot and retries with the offending entry token banned. The KV cache in
 //  this package is functional (each step returns fresh arrays), so a rollback
-//  is just holding the old references — no recompute.
+//  is just holding the old references - no recompute.
 //
 //  A completed term ends the speculation and keeps the emitted tokens. A
 //  bounded backtrack budget (`maxBacktracks`) guarantees the loop degenerates
@@ -27,7 +27,7 @@ import MLX
 
 /// Token-prefix trie over the tokenizations of registered dictionary terms.
 ///
-/// Each term is inserted in two surface variants — with a leading space
+/// Each term is inserted in two surface variants - with a leading space
 /// (mid-sentence, the common case for byte-level BPE) and bare (utterance
 /// start). Multi-word terms form a single path spanning their word tokens.
 public final class Qwen3TokenTrie: @unchecked Sendable {
@@ -67,9 +67,9 @@ public final class Qwen3TokenTrie: @unchecked Sendable {
     /// `encode` must be the same text→ids mapping the decoder emits under.
     ///
     /// `aliases` maps a canonical term to known mis-spellings/mishearings
-    /// (e.g. "Lenardo" → ["Leonardo", "Linardo"]). Alias paths are boosted
+    /// (e.g. "Fernardo" → ["Leonardo", "Linardo"]). Alias paths are boosted
     /// like the canonical and, on completion, rewrite the emitted span to the
-    /// canonical form — the multi-pronunciation-variant trie from the
+    /// canonical form - the multi-pronunciation-variant trie from the
     /// contextual-biasing literature. Register only surfaces the user would
     /// not dictate deliberately; the rewrite is unconditional.
     public static func build(
@@ -106,7 +106,7 @@ public final class Qwen3TokenTrie: @unchecked Sendable {
 public final class Qwen3TrieBoostController {
     /// Alias-completion splice the loop must apply to its emitted tokens:
     /// the last `spanLength` tokens (including the token just emitted) are
-    /// replaced by `replacement`. The KV cache keeps the alias tokens — the
+    /// replaced by `replacement`. The KV cache keeps the alias tokens - the
     /// forms are near-homographs, so downstream conditioning drift is
     /// negligible for word-length spans.
     public struct Rewrite: Equatable {
@@ -116,7 +116,7 @@ public final class Qwen3TrieBoostController {
 
     public enum Decision: Equatable {
         /// Emit `token`. When `snapshot` is true the loop must save
-        /// (scores, cache, emitted-count) for this position BEFORE emitting —
+        /// (scores, cache, emitted-count) for this position BEFORE emitting -
         /// a speculation is starting here. A non-nil `rewrite` means the token
         /// completed an alias path: splice after appending.
         case emit(token: Int32, snapshot: Bool, rewrite: Rewrite?)
@@ -151,7 +151,7 @@ public final class Qwen3TrieBoostController {
     /// Emit counter + the emit-position bans belong to. Bans veto only the
     /// re-decision at the checkpoint position they were created for; at any
     /// other position they are inert (a banned token must never override the
-    /// raw argmax elsewhere — review finding: ban leak).
+    /// raw argmax elsewhere - review finding: ban leak).
     private var emitCount = 0
     private var banPosition = -1
     /// Until armed, decisions are pure greedy with no trie tracking. Used to
@@ -193,7 +193,7 @@ public final class Qwen3TrieBoostController {
         let effectiveBans = (emitCount == banPosition) ? bans : []
         var (raw, chosen) = Self.pick(scores: scores, boostable: boostable, banned: effectiveBans, boost: boost)
         // EOS guard: when the model wants to stop and no speculation is in
-        // flight, never let the bonus start a term instead — that is how
+        // flight, never let the bonus start a term instead - that is how
         // boosted decoding regurgitates the glossary at end of transcript.
         if !speculating && raw == eosToken && chosen != raw {
             chosen = raw
@@ -208,7 +208,7 @@ public final class Qwen3TrieBoostController {
         let completed = completedState != nil
 
         if speculating && (chosen == eosToken || newActive.isEmpty) {
-            // The path died before a term completed — revoke.
+            // The path died before a term completed - revoke.
             backtracks += 1
             speculating = false
             active = checkpointActive
@@ -256,7 +256,7 @@ public final class Qwen3TrieBoostController {
     }
 
     /// Tokens eligible for the bonus at this step. During speculation only
-    /// continuations of the active path(s) are boosted — new term starts wait
+    /// continuations of the active path(s) are boosted - new term starts wait
     /// until the current one resolves, so a single snapshot always suffices.
     /// Directly after a completed term (`cooldown`) new starts are not
     /// boosted either, so completions cannot cascade term-to-term.
@@ -332,7 +332,7 @@ extension Qwen3ASRModel {
         var cache = initialCache
         var scores = cpuScores(initialLogits)
 
-        // Single rollback snapshot — valid because at most one speculation is
+        // Single rollback snapshot - valid because at most one speculation is
         // in flight (the controller defers new term starts while speculating).
         var snapScores: [Float] = []
         var snapCache: [(MLXArray, MLXArray)] = []
@@ -366,12 +366,12 @@ extension Qwen3ASRModel {
                 }
                 if token == eosToken { return generated }
                 if awaitingArm, token == armAfterToken! || steps >= 8 {
-                    // Prefix over (or clearly absent) — boost from here on.
+                    // Prefix over (or clearly absent) - boost from here on.
                     controller.setArmed(true)
                     awaitingArm = false
                 }
                 if !controller.isSpeculating && !snapCache.isEmpty {
-                    // Speculation resolved — release the checkpoint KV cache
+                    // Speculation resolved - release the checkpoint KV cache
                     // instead of pinning it for the rest of the utterance.
                     snapCache = []; snapScores = []
                 }

@@ -119,7 +119,7 @@ public class Qwen3Tokenizer {
                 continue
             }
 
-            // Keep <asr_text> and similar markers — append their UTF-8 bytes
+            // Keep <asr_text> and similar markers - append their UTF-8 bytes
             if token.hasPrefix("<") && token.hasSuffix(">") && !token.contains("|") {
                 buffer.append(contentsOf: Array(token.utf8))
                 continue

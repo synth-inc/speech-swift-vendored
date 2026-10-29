@@ -44,7 +44,7 @@ let package = Package(
     ],
     dependencies: [
         // Pinned to the same minor the Onit app resolves (0.30.x) so standalone
-        // `swift test` runs against a matching Metal kernel library — a 0.31.x
+        // `swift test` runs against a matching Metal kernel library - a 0.31.x
         // Cmlx expects fused kernels (e.g. layer_norm) absent from the app's
         // 0.30.3 default.metallib used by the CLI test runner.
         .package(url: "https://github.com/ml-explore/mlx-swift", .upToNextMinor(from: "0.30.3")),

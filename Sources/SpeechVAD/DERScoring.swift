@@ -137,7 +137,7 @@ public func computeDER(
             continue
         }
 
-        // Reference speech exists — count it
+        // Reference speech exists - count it
         totalSpeech += Float(refCount) * resolution
 
         if hypCount == 0 {
@@ -146,7 +146,7 @@ public func computeDER(
             continue
         }
 
-        // Both have speakers — compute exact match by speaker ID
+        // Both have speakers - compute exact match by speaker ID
         let matched = countExactMatched(ref: refSpeakers[f], hyp: hypSpeakers[f])
         let unmatchedRef = refCount - matched  // ref speakers with no matching hyp
         let unmatchedHyp = hypCount - matched  // hyp speakers with no matching ref

@@ -9,9 +9,9 @@ import CoreML
 
 /// Inference engine for WeSpeaker speaker embeddings.
 public enum WeSpeakerEngine: String, Sendable {
-    /// MLX backend — runs on GPU via Metal shaders.
+    /// MLX backend - runs on GPU via Metal shaders.
     case mlx
-    /// CoreML backend — runs on Neural Engine + CPU, freeing the GPU.
+    /// CoreML backend - runs on Neural Engine + CPU, freeing the GPU.
     case coreml
 }
 

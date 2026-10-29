@@ -225,7 +225,7 @@ public enum WeightLoader {
             print("Applied float text decoder weights (\(floatModel.layers.count) layers)")
         }
 
-        // Load classify head (NOT quantized — regular Linear)
+        // Load classify head (NOT quantized - regular Linear)
         CommonWeightLoader.applyLinearWeights(to: model.classifyHead, prefix: "lm_head", from: classifyWeights)
         print("Applied classify head weights")
     }

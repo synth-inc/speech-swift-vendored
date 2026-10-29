@@ -92,7 +92,7 @@ class SileroVADNetwork: Module {
         }
 
         // LSTM with explicit h/c state
-        // Encoder output is [B, 1, 128] — single timestep
+        // Encoder output is [B, 1, 128] - single timestep
         let (newH, newC) = lstmForward(x, h: h, c: c)
 
         // Decoder: use LSTM hidden state h, not full sequence output

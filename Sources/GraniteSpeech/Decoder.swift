@@ -188,7 +188,7 @@ public final class GraniteForCausalLM: Module {
         }
         h = model.norm(h)
         // Only the last position's logits are ever consumed (next-token
-        // prediction), so run lm_head (vocab 100353) over that row only — a
+        // prediction), so run lm_head (vocab 100353) over that row only - a
         // prefill over L tokens would otherwise waste L× the projection.
         let last = h[0..., (h.dim(1) - 1) ..< h.dim(1)] // (B, 1, hidden)
         return lmHead(last) / logitsScaling

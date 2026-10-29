@@ -17,7 +17,7 @@ public enum DownloadError: Error, LocalizedError {
     }
 }
 
-/// HuggingFace model downloader — shared between ASR, TTS, VAD, etc.
+/// HuggingFace model downloader - shared between ASR, TTS, VAD, etc.
 ///
 /// Uses `HubApi` from the swift-transformers `Hub` module for downloads,
 /// which provides HF token auth, metadata tracking, and resume support.
@@ -100,7 +100,7 @@ public enum HuggingFaceDownloader {
 
         // Derive the download base from the directory.
         // getCacheDirectory returns either:
-        //   old: base/cacheKey         (flat, already has weights — won't reach here)
+        //   old: base/cacheKey         (flat, already has weights - won't reach here)
         //   new: base/models/org/model  (Hub-style)
         // For Hub API we need `base` as downloadBase.
         //
@@ -112,7 +112,7 @@ public enum HuggingFaceDownloader {
         let hub = makeHubApi(for: modelId, repoDir: directory, offlineMode: offlineMode)
         let repo = Hub.Repo(id: modelId)
 
-        // Retry with exponential backoff — HuggingFace can timeout on
+        // Retry with exponential backoff - HuggingFace can timeout on
         // slow connections or rate-limit. 3 attempts: 0s, 5s, 15s delays.
         let maxRetries = 3
         var lastError: Error?
@@ -219,7 +219,7 @@ public enum HuggingFaceDownloader {
             let basePath = String(repoDirPath.dropLast(suffix.count))
             downloadBase = URL(fileURLWithPath: basePath, isDirectory: true)
         } else {
-            // Fallback: old-style flat dir — use its parent as downloadBase.
+            // Fallback: old-style flat dir - use its parent as downloadBase.
             // Hub won't match this path, so we derive base from env/defaults.
             downloadBase = resolveBaseCacheDir(cacheDirName: repoDir.deletingLastPathComponent().lastPathComponent)
         }

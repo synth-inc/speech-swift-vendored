@@ -53,12 +53,12 @@ class SincNet: Module {
             // Conv1d: [B, T, Cin] → [B, T', Cout]
             out = conv[i](out)
 
-            // First layer uses abs() (sinc filterbank — energy)
+            // First layer uses abs() (sinc filterbank - energy)
             if i == 0 {
                 out = abs(out)
             }
 
-            // MaxPool1d(3, stride=3) — pool over time (axis -2)
+            // MaxPool1d(3, stride=3) - pool over time (axis -2)
             out = maxPool1d(out, kernelSize: 3, stride: 3)
 
             // InstanceNorm + LeakyReLU
@@ -87,7 +87,7 @@ class InstanceNorm: Module {
     }
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {
-        // x: [B, L, C] — normalize over L dimension (axis 1)
+        // x: [B, L, C] - normalize over L dimension (axis 1)
         let mean = x.mean(axis: 1, keepDims: true)
         let variance = x.variance(axis: 1, keepDims: true)
         let eps: Float = 1e-5
@@ -99,7 +99,7 @@ class InstanceNorm: Module {
 
 /// 1D max pooling for channels-last data.
 ///
-/// Input: `[batch, length, channels]` — pools over the length dimension (axis -2).
+/// Input: `[batch, length, channels]` - pools over the length dimension (axis -2).
 ///
 /// - Parameters:
 ///   - x: `[batch, length, channels]`

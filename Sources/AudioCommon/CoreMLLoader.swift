@@ -7,7 +7,7 @@ import os
 /// CoreML model loader that surfaces Neural Engine fallback.
 ///
 /// `MLModel(contentsOf:configuration:)` silently succeeds when
-/// ``MILCompilerForANE`` fails — the model just runs on CPU instead of
+/// ``MILCompilerForANE`` fails - the model just runs on CPU instead of
 /// ANE. Users only see the performance cliff: RTF jumps from ~0.04 to
 /// ~1.8 on wake-word, ASR slows 5–20×, etc. They have no way to
 /// correlate this with the CoreML runtime's ``E5RT encountered an STL

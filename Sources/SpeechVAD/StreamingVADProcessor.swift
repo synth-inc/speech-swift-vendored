@@ -172,7 +172,7 @@ public final class StreamingVADProcessor {
 
         case .pendingSpeech(let startTime):
             if prob < config.offset {
-                // False alarm — speech too brief, return to silence
+                // False alarm - speech too brief, return to silence
                 state = .silence
             } else if nextTime - startTime >= config.minSpeechDuration {
                 // Speech confirmed
@@ -189,10 +189,10 @@ public final class StreamingVADProcessor {
 
         case .pendingSilence(let speechStart, let silenceStart):
             if prob >= config.onset {
-                // Speech resumed — cancel silence
+                // Speech resumed - cancel silence
                 state = .speech(startTime: speechStart)
             } else if nextTime - silenceStart >= config.minSilenceDuration {
-                // Silence confirmed — emit speechEnded
+                // Silence confirmed - emit speechEnded
                 events.append(.speechEnded(segment: SpeechSegment(
                     startTime: speechStart, endTime: silenceStart)))
                 // Check if new speech is starting

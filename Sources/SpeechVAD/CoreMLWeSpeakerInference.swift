@@ -32,13 +32,13 @@ extension WeSpeakerModel {
             shape: [1, targetLength as NSNumber, 80],
             dataType: .float16
         )
-        // `Float16` is unavailable on x86_64 macOS — see CoreMLSileroInference.
+        // `Float16` is unavailable on x86_64 macOS - see CoreMLSileroInference.
         // Fill with mel data (row-major: frame-major, 80 mels per frame), then
         // zero-pad the remaining frames.
         //
         // `baseAddress` is nil for an empty array, so a degenerate segment
         // (`nFrames == 0`) takes the plain zero-fill instead of force-unwrapping
-        // — the loops this replaced were a harmless no-op in that case.
+        // - the loops this replaced were a harmless no-op in that case.
         let copyCount = min(nFrames, targetLength) * 80
         if copyCount > 0 {
             melSpec.withUnsafeBufferPointer {

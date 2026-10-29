@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-/// Loaded model set — holds references to all loaded models.
+/// Loaded model set - holds references to all loaded models.
 public struct ModelSet: Sendable {
     public let vad: (any StreamingVADProvider)?
     public let stt: (any SpeechRecognitionModel)?
@@ -86,7 +86,7 @@ public enum ModelLoader {
 
         // Group 0: parallel (VAD + ASR)
         let group0 = specs.filter { $0.group == 0 }
-        // Group 1: sequential after group 0 (TTS — heavy, reduce peak memory)
+        // Group 1: sequential after group 0 (TTS - heavy, reduce peak memory)
         let group1 = specs.filter { $0.group != 0 }
 
         var results: [(String, any Sendable)] = []

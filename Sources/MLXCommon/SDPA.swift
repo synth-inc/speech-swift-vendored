@@ -10,7 +10,7 @@ import MLXFast
 /// output projection.
 ///
 /// Each module still owns its own input projections (which vary in width,
-/// quantisation, bias, etc.) and its own output projection — this helper
+/// quantisation, bias, etc.) and its own output projection - this helper
 /// only collapses the boilerplate around the SDPA call itself.
 public enum SDPA {
 
@@ -73,7 +73,7 @@ public enum SDPA {
         return mergeHeads(attn)
     }
 
-    /// `ScaledDotProductAttentionMaskMode` overload — used by modules that
+    /// `ScaledDotProductAttentionMaskMode` overload - used by modules that
     /// pass causal / additive masks via the newer mlx-swift API.
     public static func attendAndMerge(
         qHeads: MLXArray, kHeads: MLXArray, vHeads: MLXArray,

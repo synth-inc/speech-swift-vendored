@@ -20,7 +20,7 @@ extension SileroVADModel {
 
         // Create audio input: [1, 1, 576] float16.
         // `Float16` is unavailable on x86_64 macOS, so the conversion goes
-        // through Accelerate rather than a typed pointer — one vImage call
+        // through Accelerate rather than a typed pointer - one vImage call
         // instead of the previous per-element loop.
         let audioArray = try MLMultiArray(shape: [1, 1, 576], dataType: .float16)
         fullSamples.withUnsafeBufferPointer {

@@ -4,7 +4,7 @@ import os
 /// Thread-safe ring buffer for passing audio between the audio capture thread and the MLX
 /// inference thread. Writes drop oldest data when full; reads return zeros on underrun.
 ///
-/// Uses `os_unfair_lock` for priority inheritance — safe to call `write` from a real-time
+/// Uses `os_unfair_lock` for priority inheritance - safe to call `write` from a real-time
 /// Core Audio I/O thread without risking priority inversion.
 public final class AudioRingBuffer: @unchecked Sendable {
     private var buffer: [Float]
@@ -19,7 +19,7 @@ public final class AudioRingBuffer: @unchecked Sendable {
         self.buffer = [Float](repeating: 0, count: capacity)
     }
 
-    /// Called from audio capture thread — non-blocking; drops oldest data if full.
+    /// Called from audio capture thread - non-blocking; drops oldest data if full.
     public func write(_ samples: [Float]) {
         os_unfair_lock_lock(&_lock)
         defer { os_unfair_lock_unlock(&_lock) }
@@ -35,7 +35,7 @@ public final class AudioRingBuffer: @unchecked Sendable {
         }
     }
 
-    /// Zero-copy write from a raw pointer — preferred on real-time audio threads
+    /// Zero-copy write from a raw pointer - preferred on real-time audio threads
     /// to avoid heap allocation from `Array(UnsafeBufferPointer(...))`.
     public func write(from pointer: UnsafePointer<Float>, count sampleCount: Int) {
         os_unfair_lock_lock(&_lock)
@@ -51,7 +51,7 @@ public final class AudioRingBuffer: @unchecked Sendable {
         }
     }
 
-    /// Called from MLX inference thread — returns zeros on underrun; never blocks.
+    /// Called from MLX inference thread - returns zeros on underrun; never blocks.
     public func read(_ n: Int) -> [Float] {
         os_unfair_lock_lock(&_lock)
         defer { os_unfair_lock_unlock(&_lock) }

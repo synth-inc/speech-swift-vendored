@@ -29,7 +29,7 @@ final class EncoderParityTests: XCTestCase {
     // dynamic range. `encoder_out` is the meaningful output (feeds the
     // projector) and stays <1% across cases. Individual deep blocks can show a
     // transient bf16 spike (case_011 blocks 13-14 ~9%) that LayerNorm damps out
-    // by the final layer — so the per-block guard is loose (catches structural
+    // by the final layer - so the per-block guard is loose (catches structural
     // bugs, tolerates the known bf16 transient) while `encoder_out` is strict.
     // Across 8 cases the deep-layer bf16 transient leaks up to ~3% into
     // encoder_out (worst: case_015). The synthetic remainder==0 cases stay
@@ -38,7 +38,7 @@ final class EncoderParityTests: XCTestCase {
     private let outRelTolerance: Float = 0.04
     private let blockRelTolerance: Float = 0.15
 
-    /// maxAbsDiff / max(|expected|) — scale-invariant parity metric.
+    /// maxAbsDiff / max(|expected|) - scale-invariant parity metric.
     private func relDiff(_ got: MLXArray, _ expected: MLXArray) -> Float {
         let maxAbs = abs(expected).max().item(Float.self)
         let d = abs(got - expected).max().item(Float.self)

@@ -200,7 +200,7 @@ public class CoreMLASRModel {
         language: String? = nil,
         maxTokens: Int = 448
     ) throws -> String {
-        // 1. Extract mel features (pure CPU via Accelerate — no MLXArray)
+        // 1. Extract mel features (pure CPU via Accelerate - no MLXArray)
         let melFeatures = featureExtractor.processRaw(audio, sampleRate: sampleRate)
 
         // 2. Encode audio → MLMultiArray embeddings [1, T/8, 1024]

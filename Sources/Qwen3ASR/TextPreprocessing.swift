@@ -30,7 +30,7 @@ struct WordPair: Sendable {
 /// - Other    → whitespace split + per-Han-ideograph break
 ///
 /// Tokens are filtered to keep only Unicode Letters / Numbers and the ASCII
-/// apostrophe — punctuation, symbols, and marks are stripped before
+/// apostrophe - punctuation, symbols, and marks are stripped before
 /// timestamp slots are inserted. Han-ideograph splitting is restricted to
 /// CJK Unified + Extensions A–E + Compatibility; hiragana, katakana, and
 /// Hangul are NOT split per character (the model emits timestamp slots
@@ -163,7 +163,7 @@ public enum TextPreprocessor {
     // MARK: - Default path (whitespace + per-Han break)
 
     /// Whitespace split, then per-Han-ideograph break inside each segment.
-    /// Default path for languages with reliable word-level whitespace —
+    /// Default path for languages with reliable word-level whitespace -
     /// English, European languages, Hindi, Arabic, Vietnamese, Mongolian,
     /// Indonesian, etc. Chinese works because most Chinese text has no
     /// whitespace, so each ideograph becomes its own token via the per-Han
@@ -175,9 +175,9 @@ public enum TextPreprocessor {
             let segPairs = pairsForSegment(segment)
             // Reattach a leading whitespace separator to the first new pair
             // so the surface reads naturally when concatenated. We don't
-            // actually reinsert spaces — callers can join with spaces — but
+            // actually reinsert spaces - callers can join with spaces - but
             // we do rejoin punctuation that ended up segment-leading with
-            // no anchor word (rare, e.g. a stray "—") to the previous word.
+            // no anchor word (rare, e.g. a stray "-") to the previous word.
             if segPairs.isEmpty {
                 if !pairs.isEmpty {
                     pairs[pairs.count - 1].surface += segment
@@ -216,7 +216,7 @@ public enum TextPreprocessor {
                     pairs[pairs.count - 1].surface += nonHanBuf
                     nonHanBuf = ""
                 } else if !beforeHan {
-                    // Trailing pure-punct with no anchor at all — drop.
+                    // Trailing pure-punct with no anchor at all - drop.
                     nonHanBuf = ""
                 }
                 return
@@ -282,7 +282,7 @@ public enum TextPreprocessor {
              .decimalNumber, .letterNumber, .otherNumber,
              // Combining marks are essential for scripts like Thai, Lao,
              // Khmer, Burmese, Tibetan, Devanagari, Bengali, Arabic harakat
-             // — stripping them mangles the word (e.g. "สวัสดี" → "สวสด").
+             // - stripping them mangles the word (e.g. "สวัสดี" → "สวสด").
              .nonspacingMark, .spacingMark, .enclosingMark:
             return true
         default:

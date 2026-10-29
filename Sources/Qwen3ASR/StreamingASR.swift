@@ -80,7 +80,7 @@ public class StreamingASR {
         return StreamingASR(asrModel: asr, vadModel: vad)
     }
 
-    /// Streaming transcription — emits TranscriptionSegments as speech is detected.
+    /// Streaming transcription - emits TranscriptionSegments as speech is detected.
     public func transcribeStream(
         audio: [Float],
         sampleRate: Int = 16000,
@@ -117,7 +117,7 @@ public class StreamingASR {
                         case .speechEnded(let segment):
                             if let startSample = speechStartSample {
                                 let endSample = min(Int(segment.endTime * 16000), samples.count)
-                                // After a force-split, startSample may equal endSample — skip empty spans
+                                // After a force-split, startSample may equal endSample - skip empty spans
                                 guard startSample < endSample else {
                                     speechStartSample = nil
                                     continue

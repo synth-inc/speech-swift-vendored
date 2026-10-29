@@ -115,13 +115,13 @@ public final class StreamingAudioPlayer: @unchecked Sendable {
     private var playbackFinishedFired = false
 
     /// Pre-buffer duration in seconds. Playback starts after this much audio accumulates.
-    /// Default 1.0s — sufficient for streaming TTS at RTF < 0.6.
+    /// Default 1.0s - sufficient for streaming TTS at RTF < 0.6.
     public var preBufferDuration: Double = 1.0
 
     /// Callback when all audio has finished playing.
     public var onPlaybackFinished: (() -> Void)?
 
-    /// Ring buffer capacity in seconds. Default 30s — enough for any TTS response.
+    /// Ring buffer capacity in seconds. Default 30s - enough for any TTS response.
     public var ringBufferDuration: Double = 30
 
     public init() {}
@@ -174,7 +174,7 @@ public final class StreamingAudioPlayer: @unchecked Sendable {
 
     /// Start the source node (for use when attaching before engine.start()).
     public func startPlayback() {
-        // Source node is always running once attached — no-op
+        // Source node is always running once attached - no-op
     }
 
     /// Detach from an external engine.
@@ -264,7 +264,7 @@ public final class StreamingAudioPlayer: @unchecked Sendable {
 
     // MARK: - Completion
 
-    /// Signal that TTS generation is complete — no more chunks will arrive.
+    /// Signal that TTS generation is complete - no more chunks will arrive.
     /// The render callback will drain remaining samples, then fire onPlaybackFinished.
     public func markGenerationComplete() {
         lock.lock()
@@ -275,7 +275,7 @@ public final class StreamingAudioPlayer: @unchecked Sendable {
         let written = totalWritten
         lock.unlock()
 
-        // No engine or nothing was written — fire immediately
+        // No engine or nothing was written - fire immediately
         if !hasEngine || (empty && written == 0) {
             guard !playbackFinishedFired else { return }
             playbackFinishedFired = true
@@ -299,7 +299,7 @@ public final class StreamingAudioPlayer: @unchecked Sendable {
         timer.schedule(deadline: .now() + 0.2, repeating: 0.2)
         timer.setEventHandler { [weak self] in
             guard let self else { return }
-            // Already fired by render callback — stop polling
+            // Already fired by render callback - stop polling
             guard !self.playbackFinishedFired else {
                 self.completionPollTimer?.cancel()
                 self.completionPollTimer = nil
@@ -314,7 +314,7 @@ public final class StreamingAudioPlayer: @unchecked Sendable {
 
             // All samples consumed (or render thread never started reading)
             let drained = remaining == 0 && read >= written && written > 0
-            // Render thread never started — audio engine not running
+            // Render thread never started - audio engine not running
             let stalled = complete && read == 0 && written > 0
 
             if complete && (drained || stalled) {
@@ -413,7 +413,7 @@ public final class StreamingAudioPlayer: @unchecked Sendable {
             self.lock.unlock()
 
             if !started {
-                // Pre-buffer not full yet — output silence
+                // Pre-buffer not full yet - output silence
                 dst.update(repeating: 0, count: frames)
                 return noErr
             }
@@ -436,7 +436,7 @@ public final class StreamingAudioPlayer: @unchecked Sendable {
                     self.onPlaybackFinished?()
                 }
             } else {
-                // Underflow — output silence, keep waiting for more data
+                // Underflow - output silence, keep waiting for more data
                 dst.update(repeating: 0, count: frames)
             }
 

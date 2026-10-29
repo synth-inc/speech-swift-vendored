@@ -9,9 +9,9 @@ import CoreML
 
 /// Inference engine for Silero VAD.
 public enum SileroVADEngine: String, Sendable {
-    /// MLX backend — runs on GPU via Metal shaders.
+    /// MLX backend - runs on GPU via Metal shaders.
     case mlx
-    /// CoreML backend — runs on Neural Engine + CPU, freeing the GPU.
+    /// CoreML backend - runs on Neural Engine + CPU, freeing the GPU.
     case coreml
 }
 
@@ -49,9 +49,9 @@ public final class SileroVADModel {
 
     // MARK: - MLX State
 
-    /// LSTM hidden state (carried across chunks) — MLX engine
+    /// LSTM hidden state (carried across chunks) - MLX engine
     private var h: MLXArray?
-    /// LSTM cell state (carried across chunks) — MLX engine
+    /// LSTM cell state (carried across chunks) - MLX engine
     private var c: MLXArray?
 
     // MARK: - CoreML State
@@ -308,7 +308,7 @@ public final class SileroVADModel {
 extension SileroVADModel: VoiceActivityDetectionModel {
     public var inputSampleRate: Int { Self.sampleRate }
 
-    /// Protocol conformance — uses default Silero config.
+    /// Protocol conformance - uses default Silero config.
     public func detectSpeech(audio: [Float], sampleRate: Int) -> [SpeechSegment] {
         detectSpeech(audio: audio, sampleRate: sampleRate, config: .sileroDefault)
     }

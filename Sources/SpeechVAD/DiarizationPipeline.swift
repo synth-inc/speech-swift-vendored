@@ -215,7 +215,7 @@ public final class PyannoteDiarizationPipeline {
         let emptyResult = DiarizationResult(segments: [], numSpeakers: 0, speakerEmbeddings: [])
         let samples = DiarizationHelpers.resample(audio, from: sampleRate, to: segConfig.sampleRate)
 
-        // Stage 0 (optional): VAD pre-filter — mask non-speech to reduce false alarms
+        // Stage 0 (optional): VAD pre-filter - mask non-speech to reduce false alarms
         let speechMask: [SpeechSegment]?
         if let vadModel {
             if progressHandler?(0, "VAD pre-filtering") == false {
@@ -467,7 +467,7 @@ public final class PyannoteDiarizationPipeline {
 
             for localSpk in 0..<3 {
                 guard let globalSpk = localToGlobal[w]?[localSpk] else {
-                    continue  // No embedding for this speaker — skip (insufficient audio)
+                    continue  // No embedding for this speaker - skip (insufficient audio)
                 }
 
                 let probs = wp.tracks[localSpk]

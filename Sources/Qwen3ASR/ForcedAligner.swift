@@ -46,7 +46,7 @@ public enum ForcedAlignerVariant: String, CaseIterable, Sendable {
     }
 }
 
-/// Qwen3 Forced Aligner — predicts word-level timestamps for audio+text pairs.
+/// Qwen3 Forced Aligner - predicts word-level timestamps for audio+text pairs.
 ///
 /// Uses the same encoder-decoder architecture as Qwen3-ASR but replaces the
 /// vocab lm_head with a 5000-class timestamp classification head.
@@ -87,7 +87,7 @@ public class Qwen3ForcedAligner {
     /// addressable range) but in practice the model's reliable range is
     /// shorter (~270s on Qwen3-ForcedAligner-0.6B-4bit observed on TED-Ed
     /// material). Past that, it produces low/non-monotonic indices that
-    /// LIS correction collapses into a flat plateau — every trailing word
+    /// LIS correction collapses into a flat plateau - every trailing word
     /// shares the same timestamp.
     ///
     /// `alignLong` runs `align` on the full audio, detects the trailing
@@ -107,7 +107,7 @@ public class Qwen3ForcedAligner {
         // The model is reliable up to ~270s on the bundles we ship; we
         // don't try to be too aggressive with the threshold so the
         // single-pass case stays the common path. The plateau detector
-        // does the actual work — this is just a fast bypass when there's
+        // does the actual work - this is just a fast bypass when there's
         // no risk of saturation.
         let bypassThresholdSeconds: Float = 240
         let minChunkSeconds: Float = 5
@@ -130,7 +130,7 @@ public class Qwen3ForcedAligner {
             )
             if aligned.isEmpty { break }
 
-            // Skip plateau detection on small chunks — the model is reliable
+            // Skip plateau detection on small chunks - the model is reliable
             // there, and detecting plateau on tiny outputs creates spurious
             // splits.
             if durationSec <= bypassThresholdSeconds || aligned.count < plateauMinWords * 2 {
@@ -142,7 +142,7 @@ public class Qwen3ForcedAligner {
                 aligned, tolerance: plateauTolerance, minSize: plateauMinWords
             )
             if plateauStart == aligned.count {
-                // No plateau — alignment looks healthy.
+                // No plateau - alignment looks healthy.
                 allAligned.append(contentsOf: Self.offsetWords(aligned, by: offsetSec))
                 break
             }

@@ -289,7 +289,7 @@ public final class SortformerDiarizer {
         let cacheCapacity = config.spkcacheLen
 
         if fifoLength + validFrames <= fifoCapacity {
-            // FIFO has room — just append
+            // FIFO has room - just append
             for f in 0..<validFrames {
                 let srcBase = f * dim
                 let dstBase = (fifoLength + f) * dim
@@ -314,7 +314,7 @@ public final class SortformerDiarizer {
                 }
                 spkcacheLength += overflow
             } else {
-                // Spkcache also overflows — shift left and append
+                // Spkcache also overflows - shift left and append
                 let cacheOverflow = spkcacheLength + overflow - cacheCapacity
                 let keep = spkcacheLength - cacheOverflow
                 if keep > 0 {

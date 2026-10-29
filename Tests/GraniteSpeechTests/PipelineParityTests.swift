@@ -37,7 +37,7 @@ final class PipelineParityTests: XCTestCase {
             let got = model.buildPrompt(numAudioTokens: numAudio)
 
             // The prompt uses the canonical chat template `...\n ASSISTANT:`
-            // (token 36660 with leading space, asserted below) — matching real
+            // (token 36660 with leading space, asserted below) - matching real
             // Python `generate`, not the fallback `...\nASSISTANT:` (5045).
             // The ONLY residual divergence is swift-transformers' BPE merging
             // "?\n" into one token (5380) where HF keeps "?"(30)+"\n"(198)

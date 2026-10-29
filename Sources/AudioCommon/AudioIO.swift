@@ -2,7 +2,7 @@
 import AVFoundation
 import os
 
-/// Reusable audio I/O manager — handles mic capture, resampling, and playback.
+/// Reusable audio I/O manager - handles mic capture, resampling, and playback.
 ///
 /// Eliminates AVAudioEngine boilerplate that every demo app reimplements.
 ///

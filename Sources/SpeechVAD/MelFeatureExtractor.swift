@@ -228,7 +228,7 @@ class MelFeatureExtractor {
 
     /// Extract 80-dim log-mel features from audio.
     /// - Parameter audio: PCM Float32 samples at 16kHz
-    /// - Returns: `MLXArray [T, 80]` — time-major mel features
+    /// - Returns: `MLXArray [T, 80]` - time-major mel features
     func extract(_ audio: [Float]) -> MLXArray {
         let (melSpec, nFrames) = extractRaw(audio)
         return MLXArray(melSpec, [nFrames, nMels])

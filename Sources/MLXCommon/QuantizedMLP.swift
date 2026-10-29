@@ -2,7 +2,7 @@ import Foundation
 import MLX
 import MLXNN
 
-/// SwiGLU MLP with quantized linear layers — shared by ASR text decoder, TTS Talker, and Code Predictor
+/// SwiGLU MLP with quantized linear layers - shared by ASR text decoder, TTS Talker, and Code Predictor
 public class QuantizedMLP: Module {
     @ModuleInfo public var gateProj: QuantizedLinear
     @ModuleInfo public var upProj: QuantizedLinear

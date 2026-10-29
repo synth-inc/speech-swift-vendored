@@ -47,7 +47,7 @@ public struct Qwen3DecodingOptions: Sendable {
     public var boostMaxBacktracks: Int = 16
 
     /// Canonical term → known mishearing surfaces. Alias paths are boosted
-    /// like the canonical and rewritten to it on completion (unconditional —
+    /// like the canonical and rewritten to it on completion (unconditional -
     /// register only surfaces the user would not dictate deliberately).
     public var boostAliases: [String: [String]] = [:]
 
@@ -288,7 +288,7 @@ public class Qwen3ASRModel {
         // the full logits tensor to CPU for repetition / n-gram / temperature
         // manipulation, which would defeat the overlap.
         // Trie-boosted path: dictionary terms bias token selection at decode
-        // time (shallow fusion with rollback revocation — see TrieBoost.swift).
+        // time (shallow fusion with rollback revocation - see TrieBoost.swift).
         var trieController: Qwen3TrieBoostController? = nil
         if !decodingOptions.boostTerms.isEmpty, let tokenizer = tokenizer {
             let trie = Qwen3TokenTrie.build(
@@ -402,7 +402,7 @@ public class Qwen3ASRModel {
             // [batch, seq] int32 tensor; nextTokenArr is 0-D so we expand
             // twice to [1, 1].
             //
-            // Skip the speculative graph build on the LAST iteration —
+            // Skip the speculative graph build on the LAST iteration -
             // we'd never consume it, and on tiny `maxTokens` the saved
             // GPU/host work matters.
             var nextTokenArrN1: MLXArray? = nil
@@ -424,7 +424,7 @@ public class Qwen3ASRModel {
 
             // Now sync N. By the time we reach `.item()` the GPU has
             // very likely finished N already, and the cost of this call
-            // shrinks to a host-side memcpy of one int32 — which itself
+            // shrinks to a host-side memcpy of one int32 - which itself
             // overlaps with the in-flight N+1 forward pass.
             let nextToken = nextTokenArr.item(Int32.self)
             // Match the legacy loop semantics exactly: append the token
@@ -435,7 +435,7 @@ public class Qwen3ASRModel {
             if nextToken == eosToken { break }
 
             guard let advancedCache = cacheN1, let advancedToken = nextTokenArrN1 else {
-                // Final iteration without speculative work — nothing to
+                // Final iteration without speculative work - nothing to
                 // advance to; the loop will exit naturally next.
                 break
             }
@@ -500,14 +500,14 @@ public class Qwen3ASRModel {
     ///
     /// Access is `internal static` (not `private`) so
     /// ``Qwen3DecodingOptionsTests`` can exercise the sampler directly via
-    /// ``@testable import Qwen3ASR`` — there is no GPU or model download
+    /// ``@testable import Qwen3ASR`` - there is no GPU or model download
     /// involved so the path is trivially unit-testable once reachable.
     static func pickNextToken(
         logits: MLXArray,
         generatedSoFar: [Int32],
         options: Qwen3DecodingOptions
     ) -> Int32 {
-        // Fast path — pure greedy, no modifications.
+        // Fast path - pure greedy, no modifications.
         if options.repetitionPenalty == 1.0,
            options.noRepeatNgramSize == 0,
            options.temperature == 0 {
@@ -528,7 +528,7 @@ public class Qwen3ASRModel {
                 let idx = Int(token)
                 guard idx >= 0, idx < vocabSize else { continue }
                 let v = scores[idx]
-                // Positive logits divide; negative logits multiply — matches
+                // Positive logits divide; negative logits multiply - matches
                 // HuggingFace's implementation so the penalty always reduces
                 // the probability of the repeated token.
                 scores[idx] = v > 0 ? v / penalty : v * penalty
@@ -540,7 +540,7 @@ public class Qwen3ASRModel {
         let n = options.noRepeatNgramSize
         if n > 0 && generatedSoFar.count >= n - 1 {
             let lastPrefix = Array(generatedSoFar.suffix(n - 1))
-            // Walk every position where `lastPrefix` already appeared —
+            // Walk every position where `lastPrefix` already appeared -
             // the token that followed it becomes forbidden as the NEXT
             // token now.
             if generatedSoFar.count >= n {
@@ -677,7 +677,7 @@ public extension Qwen3ASRModel {
         let cacheDir = try cacheDir ?? HuggingFaceDownloader.getCacheDirectory(for: modelId)
 
         // Download weights and tokenizer files (skips files that already exist on disk)
-        // Download is the slowest part — give it 0-80% of progress
+        // Download is the slowest part - give it 0-80% of progress
         try await HuggingFaceDownloader.downloadWeights(
             modelId: modelId,
             to: cacheDir,
